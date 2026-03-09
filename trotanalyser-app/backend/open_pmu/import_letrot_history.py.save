@@ -1,0 +1,139 @@
+r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+import requests
+import sqlite3
+import sys
+from bs4 import BeautifulSoup
+from datetime import datetime,timedelta
+
+DB="trotanalyser.db"
+
+def daterange(start,end):
+
+    start=datetime.strptime(start,"%d/%m/%Y")
+    end=datetime.strptime(end,"%d/%m/%Y")
+
+    d=start
+
+    while d<=end:
+
+        yield d.strftime("%Y-%m-%d"),d.strftime("%d/%m/%Y")
+
+        d+=timedelta(days=1)
+
+
+def parse_day(date_iso):
+
+    url=f"https://www.letrot.com/courses/{date_iso}"
+
+    r=requests.get(url,
+cat > open_pmu/import_letrot_history.py <<'EOF'
+import requests
+import sqlite3
+import sys
+from bs4 import BeautifulSoup
+from datetime import datetime,timedelta
+
+DB="trotanalyser.db"
+
+def daterange(start,end):
+
+    start=datetime.strptime(start,"%d/%m/%Y")
+    end=datetime.strptime(end,"%d/%m/%Y")
+
+    d=start
+
+    while d<=end:
+
+        yield d.strftime("%Y-%m-%d"),d.strftime("%d/%m/%Y")
+
+        d+=timedelta(days=1)
+
+
+def parse_day(date_iso):
+
+    url=f"https://www.letrot.com/courses/{date_iso}"
+
+    r=requests.get(url,headers={"User-Agent":"Mozilla/5.0"},timeout=30)
+
+    soup=BeautifulSoup(r.text,"lxml")
+
+    text=soup.get_text("\n")
+
+    rows=[]
+
+    reunion=None
+    hippo=None
+
+    for line in text.split("\n"):
+
+        line=line.strip()
+
+        if line.startswith("R") and " " in line:
+
+            parts=line.split()
+
+            reunion=parts[0]
+
+            if len(parts)>1:
+                hippo=" ".join(parts[1:])
+
+        if line.startswith("C"):
+
+            course=line.split()[0]
+
+            rows.append((reunion,course,hippo))
+
+    return rows
+
+
+def main(start,end):
+
+    conn=sqlite3.connect(DB)
+
+    cur=conn.cursor()
+
+    total=0
+
+    for iso,fr in daterange(start,end):
+
+        try:
+
+            rows=parse_day(iso)
+
+            inserted=0
+
+            for r,c,h in rows:
+
+                cur.execute("""
+                INSERT OR IGNORE INTO historical_races_letrot
+                (date_course,hippo,reunion,course)
+                VALUES (?,?,?,?)
+                """,(fr,h,r,c))
+
+                inserted+=1
+
+            conn.commit()
+
+            total+=inserted
+
+            print(fr,"->",inserted,"courses importées")
+
+        except Exception as e:
+
+            print(fr,"-> erreur",e)
+
+    conn.close()
+
+    print("TOTAL LETROT =",total)
+
+
+if __name__=="__main__":
+
+    if len(sys.argv)!=3:
+
+        print("usage: python3 import_letrot_history.py JJ/MM/AAAA JJ/MM/AAAA")
+
+        sys.exit()
+
+    main(sys.argv[1],sys.argv[2])
+
