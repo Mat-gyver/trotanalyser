@@ -14,14 +14,10 @@ pkill -f "node .*expo" || true
 sleep 2
 
 echo "=== START backend : 8000 ==="
-
-cd "$ROOT/backend"
-
-nohup uvicorn api_before_value_fix:app \
-  --host 0.0.0.0 \
-  --port 8000 \
-  > "$ROOT/backend.log" 2>&1 &
-
+cd "$BACKEND_DIR"
+nohup cd "$ROOT/backend"
+nohup uvicorn api_before_value_fix:app --host 0.0.0.0 --port 8000 > "$ROOT/backend.log" 2>&1 &
+cd "$ROOT"
 cd "$ROOT"
 
 sleep 3

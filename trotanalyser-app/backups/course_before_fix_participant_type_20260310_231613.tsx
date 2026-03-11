@@ -29,28 +29,8 @@ export default function CourseScreen() {
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false)
 
-  useEffect(() => {
-    if (!reunion || !course) return;
-
-    const loadCourse = async () => {
-      try {
-        setError(false);
-
-        const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
-        const json = await res.json();
-
-        setData(json?.data ?? json);
-      } catch (e) {
-        console.error("Erreur chargement course:", e);
-        setError(true);
-      }
-    };
-
-    loadCourse();
-  }, [reunion, course]);
-
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
-  const top3 = sortedParticipants.slice(0, 3)[0];
+  const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
+  const top3 = sortedParticipants.slice(0, 3);[0];
 
   const topTocard = sortedParticipants.find((c: any) =>
     (c.badges || []).includes("TOCARD IA"),
@@ -60,7 +40,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     (a, b) => (b.driverIndex || 0) - (a.driverIndex || 0),
   )[0];
 
-  const pronosticIa = sortedParticipants.slice(0, 5).map((c: any) => (c as any).numero).join(" - ");
+  const pronosticIa = sortedParticipants.slice(0, 5).map((c: any) => c.numero).join(" - ");
 
   const shortFerrure = (f?: string) => {
     if (!f || f === "NR") return "NR";
@@ -123,7 +103,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     if ((c.badges || []).includes("FAVORI FRAGILE")) tags.push("⚠️ FAVORI FRAGILE");
     if (
       (c.badges || []).includes("TOCARD IA") ||
-      ((c.value || 0) > 3 && ((c as any).probabiliteIA || 0) <= 10)
+      ((c.value || 0) > 3 && (c.probabiliteIA || 0) <= 10)
     ) {
       tags.push("💣 GROS TOCARD");
     }
@@ -173,27 +153,27 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
 
     const lines: string[] = [];
 
-    if (top3IA && (top3IA[0]?.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA[0]?.numero}`);
-    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA[0]?.numero}`);
+    if (top3IA && (top3IA.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA.numero}`);
+    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA.numero}`);
 
     if (ecart < 10) lines.push("⚡ Course ouverte pour les places");
     else if (ecart > 20) lines.push("🎯 Course assez lisible");
     else lines.push("🧩 Course intermédiaire");
 
     if (outsiders.length) {
-      lines.push(`💣 Outsiders dangereux : ${outsiders.map((c: any) => (c as any).numero).join(" ")}`);
+      lines.push(`💣 Outsiders dangereux : ${outsiders.map((c: any) => c.numero).join(" ")}`);
     }
 
     return lines.slice(0, 3);
   };
 
   const strategieConseil = () => {
-    const base = top3IA ? `${top3IA[0]?.numero}` : "-";
-    const chances = sortedParticipants.slice(1, 4).map((c: any) => (c as any).numero).join(" ");
+    const base = top3IA ? `${top3IA.numero}` : "-";
+    const chances = sortedParticipants.slice(1, 4).map((c: any) => c.numero).join(" ");
     const outsiders = sortedParticipants
       .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
       .slice(0, 3)
-      .map((c: any) => (c as any).numero)
+      .map((c: any) => c.numero)
       .join(" ");
 
     let jeu = "Jeu conseillé : Couplé / 2sur4";
@@ -334,17 +314,17 @@ const lectureValueSummary = (sortedParticipants: Participant[] = []) => {
 
   const fortes = sorted.filter((c: any) => Number(c.value || 0) >= 8).slice(0, 3)
   if (fortes.length > 0) {
-    return `Values fortes : ${fortes.map((c: any) => (c as any).numero).join(" ")}`
+    return `Values fortes : ${fortes.map((c: any) => c.numero).join(" ")}`
   }
 
   const positives = sorted.filter((c: any) => Number(c.value || 0) >= 3).slice(0, 3)
   if (positives.length > 0) {
-    return `Values à suivre : ${positives.map((c: any) => (c as any).numero).join(" ")}`
+    return `Values à suivre : ${positives.map((c: any) => c.numero).join(" ")}`
   }
 
   const negatives = sorted.filter((c: any) => Number(c.value || 0) <= -3).slice(0, 2)
   if (negatives.length > 0) {
-    return `Favoris surcotés : ${negatives.map((c: any) => (c as any).numero).join(" ")}`
+    return `Favoris surcotés : ${negatives.map((c: any) => c.numero).join(" ")}`
   }
 
   return "Pas de value nette"
@@ -396,12 +376,12 @@ const pmuBar = (cote?: number) => {
 
       
 {sortedParticipants.map((c: any) => (
-         <CourseHorseInlineCard key={String((c as any).numero)}> 
+         <CourseHorseInlineCard key={String(c.numero)}> 
           <View style={[styles.cardHeader,{alignItems:"center"}]}>
             <View style={styles.nameWrap}>
               {renderCasaque(c)}
               <Text style={styles.lineStats}>
-                {(c as any).numero} - {c.nom}   SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}   IA {iaProbBar((c as any).probabiliteIA, c.cotePMU)} {(c as any).probabiliteIA ?? 0}%   PMU {pmuBar(c.cotePMU)} {Math.round(impliedProbPmu(c.cotePMU))}%
+                {c.numero} - {c.nom}   SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}   IA {iaProbBar(c.probabiliteIA, c.cotePMU)} {c.probabiliteIA ?? 0}%   PMU {pmuBar(c.cotePMU)} {Math.round(impliedProbPmu(c.cotePMU))}%
               </Text>
             </View>
 
@@ -415,7 +395,7 @@ const pmuBar = (cote?: number) => {
           <View style={styles.badgesRow}>
             {(c.badges || []).slice(0, 3).map((badge: any, index: number) => (
               <View
-                key={`${(c as any).numero}-${badge}-${index}`}
+                key={`${c.numero}-${badge}-${index}`}
                 style={[
                   styles.badge,
                   badge === "VALUE BET" && styles.badgeValue,
@@ -488,16 +468,16 @@ const pmuBar = (cote?: number) => {
                 <Text
                   style={[
                     styles.levelBadge,
-                    ((c as any).probabiliteIA || 0) >= 20
+                    (c.probabiliteIA || 0) >= 20
                       ? styles.levelFavori
-                      : ((c as any).probabiliteIA || 0) >= 10
+                      : (c.probabiliteIA || 0) >= 10
                       ? styles.levelChance
                       : styles.levelOutsider,
                   ]}
                 >
-                  {((c as any).probabiliteIA || 0) >= 20
+                  {(c.probabiliteIA || 0) >= 20
                     ? "🟢 Favori"
-                    : ((c as any).probabiliteIA || 0) >= 10
+                    : (c.probabiliteIA || 0) >= 10
                     ? "🟡 Chance"
                     : "🔴 Outsider"}
                 </Text>
@@ -507,7 +487,7 @@ const pmuBar = (cote?: number) => {
 
               <View style={styles.alertRow}>
                 {alertTags(c).map((tag: any, index: number) => (
-                  <View key={`${(c as any).numero}-alert-${index}`} style={styles.alertPill}>
+                  <View key={`${c.numero}-alert-${index}`} style={styles.alertPill}>
                     <Text style={styles.alertText}>{tag}</Text>
                   </View>
                 ))}
