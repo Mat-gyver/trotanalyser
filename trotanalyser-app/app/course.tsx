@@ -49,7 +49,7 @@ export default function CourseScreen() {
     loadCourse();
   }, [reunion, course]);
 
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
+const { sortedParticipants = [], top3IA, valueBets, topValue } = useCourseAnalysis(data);
   const top3 = sortedParticipants.slice(0, 3)[0];
 
   const topTocard = sortedParticipants.find((c: any) =>
@@ -162,7 +162,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
   };
 
   const lectureCourse = () => {
-    const scores = sortedParticipants.map((c: any) => c.scoreIA || 0);
+    const scores = (sortedParticipants || []).map((c: any) => c.scoreIA || 0);
     const max = scores.length ? Math.max(...scores) : 0;
     const min = scores.length ? Math.min(...scores) : 0;
     const ecart = max - min;
@@ -197,7 +197,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
       .join(" ");
 
     let jeu = "Jeu conseillé : Couplé / 2sur4";
-    if (sortedParticipants.filter((c: any) => (c.value || 0) > 3).length >= 3) {
+    if ((sortedParticipants || []).filter((c: any) => (c.value || 0) > 3).length >= 3) {
       jeu = "Jeu conseillé : Quinté champ réduit";
     } else if ((sortedParticipants[0]?.scoreIA || 0) - (sortedParticipants[3]?.scoreIA || 0) < 8) {
       jeu = "Jeu conseillé : Trio / Multi";
@@ -395,7 +395,7 @@ const pmuBar = (cote?: number) => {
       <CourseInsights participants={sortedParticipants} styles={styles} />
 
       
-{sortedParticipants.map((c: any) => (
+{(sortedParticipants || []).map((c: any) => (
          <CourseHorseInlineCard key={String((c as any).numero)}> 
           <View style={[styles.cardHeader,{alignItems:"center"}]}>
             <View style={styles.nameWrap}>
