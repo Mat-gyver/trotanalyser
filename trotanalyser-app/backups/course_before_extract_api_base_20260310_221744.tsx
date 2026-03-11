@@ -13,9 +13,10 @@ import CoursePhysiology from "../components/course/CoursePhysiology";
 import CourseHorseInlineCard from "../components/course/CourseHorseInlineCard";
 import { styles } from "../components/course/courseScreenStyles";
 import type { Participant, CourseData } from "../types/courseScreen";
-import { API_BASE } from "../constants/courseApiBase";
-import CourseInsights from "../components/course/CourseInsights";
-import { useCourseAnalysis } from "../hooks/useCourseAnalysis";
+
+const API_BASE =
+process.env.EXPO_PUBLIC_API_BASE ||
+window.location.origin.replace(/-\d+\.app\.github\.dev$/, "-8000.app.github.dev");
 
 export default function CourseScreen() {
   const { reunion, course } = useLocalSearchParams<{
@@ -29,38 +30,57 @@ export default function CourseScreen() {
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false)
 
-  useEffect(() => {
-    if (!reunion || !course) return;
+  const sortedParticipants = useMemo(
+    () =>
+      [...(data?.participants || [])].sort(
+        (a, b) =>
+          Number(b.value || -999) - Number(a.value || -999) ||
+          Number(b.scoreIA || 0) - Number(a.scoreIA || 0)
+      ),
+    [data]
+  );
 
-    const loadCourse = async () => {
+  useEffect(() => {
+    const load = async () => {
       try {
         setError(false);
-
         const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
         const json = await res.json();
-
-        setData(json?.data ?? json);
-      } catch (e) {
-        console.error("Erreur chargement course:", e);
+        setData(json);
+      } catch {
         setError(true);
       }
     };
 
-    loadCourse();
+    if (reunion && course) load();
   }, [reunion, course]);
 
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
-  const top3 = sortedParticipants.slice(0, 3)[0];
+  const participants = useMemo<Participant[]>(
+    () => data?.participants || [],
+    [data],
+  );
 
-  const topTocard = sortedParticipants.find((c: any) =>
+  const topIa = participants[0];
+  const top3 = participants.slice(0, 3);
+
+  const valueBets = [...participants]
+    .filter((c) => (c.value || 0) > 0)
+    .sort((a, b) => (b.value || 0) - (a.value || 0))
+    .slice(0, 3);
+
+  const topValue = [...participants].sort(
+    (a, b) => (b.value || 0) - (a.value || 0),
+  )[0];
+
+  const topTocard = participants.find((c) =>
     (c.badges || []).includes("TOCARD IA"),
   );
 
-  const topDriver = [...sortedParticipants].sort(
+  const topDriver = [...participants].sort(
     (a, b) => (b.driverIndex || 0) - (a.driverIndex || 0),
   )[0];
 
-  const pronosticIa = sortedParticipants.slice(0, 5).map((c: any) => (c as any).numero).join(" - ");
+  const pronosticIa = participants.slice(0, 5).map((c) => c.numero).join(" - ");
 
   const shortFerrure = (f?: string) => {
     if (!f || f === "NR") return "NR";
@@ -123,7 +143,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     if ((c.badges || []).includes("FAVORI FRAGILE")) tags.push("⚠️ FAVORI FRAGILE");
     if (
       (c.badges || []).includes("TOCARD IA") ||
-      ((c.value || 0) > 3 && ((c as any).probabiliteIA || 0) <= 10)
+      ((c.value || 0) > 3 && (c.probabiliteIA || 0) <= 10)
     ) {
       tags.push("💣 GROS TOCARD");
     }
@@ -162,44 +182,44 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
   };
 
   const lectureCourse = () => {
-    const scores = sortedParticipants.map((c: any) => c.scoreIA || 0);
+    const scores = participants.map((c) => c.scoreIA || 0);
     const max = scores.length ? Math.max(...scores) : 0;
     const min = scores.length ? Math.min(...scores) : 0;
     const ecart = max - min;
 
-    const outsiders = sortedParticipants
-      .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
+    const outsiders = participants
+      .filter((c) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
       .slice(0, 3);
 
     const lines: string[] = [];
 
-    if (top3IA && (top3IA[0]?.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA[0]?.numero}`);
-    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA[0]?.numero}`);
+    if (topIa && (topIa.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${topIa.numero}`);
+    else if (topIa) lines.push(`⚠️ Favori discutable : ${topIa.numero}`);
 
     if (ecart < 10) lines.push("⚡ Course ouverte pour les places");
     else if (ecart > 20) lines.push("🎯 Course assez lisible");
     else lines.push("🧩 Course intermédiaire");
 
     if (outsiders.length) {
-      lines.push(`💣 Outsiders dangereux : ${outsiders.map((c: any) => (c as any).numero).join(" ")}`);
+      lines.push(`💣 Outsiders dangereux : ${outsiders.map((c) => c.numero).join(" ")}`);
     }
 
     return lines.slice(0, 3);
   };
 
   const strategieConseil = () => {
-    const base = top3IA ? `${top3IA[0]?.numero}` : "-";
-    const chances = sortedParticipants.slice(1, 4).map((c: any) => (c as any).numero).join(" ");
-    const outsiders = sortedParticipants
-      .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
+    const base = topIa ? `${topIa.numero}` : "-";
+    const chances = participants.slice(1, 4).map((c) => c.numero).join(" ");
+    const outsiders = participants
+      .filter((c) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
       .slice(0, 3)
-      .map((c: any) => (c as any).numero)
+      .map((c) => c.numero)
       .join(" ");
 
     let jeu = "Jeu conseillé : Couplé / 2sur4";
-    if (sortedParticipants.filter((c: any) => (c.value || 0) > 3).length >= 3) {
+    if (participants.filter((c) => (c.value || 0) > 3).length >= 3) {
       jeu = "Jeu conseillé : Quinté champ réduit";
-    } else if ((sortedParticipants[0]?.scoreIA || 0) - (sortedParticipants[3]?.scoreIA || 0) < 8) {
+    } else if ((participants[0]?.scoreIA || 0) - (participants[3]?.scoreIA || 0) < 8) {
       jeu = "Jeu conseillé : Trio / Multi";
     }
 
@@ -212,16 +232,16 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
   };
 
   const physionomieCourse = () => {
-    const leaders = sortedParticipants
-      .filter((c: any) => (c.driverIndex || 0) >= 7 && (c.scoreIA || 0) >= 12)
+    const leaders = participants
+      .filter((c) => (c.driverIndex || 0) >= 7 && (c.scoreIA || 0) >= 12)
       .slice(0, 3);
 
-    const finishers = sortedParticipants
-      .filter((c: any) => (c.retardGains || 0) >= 4)
+    const finishers = participants
+      .filter((c) => (c.retardGains || 0) >= 4)
       .slice(0, 3);
 
-    const attentistes = sortedParticipants
-      .filter((c: any) => (c.scoreIA || 0) < 12 && (c.value || 0) > 0)
+    const attentistes = participants
+      .filter((c) => (c.scoreIA || 0) < 12 && (c.value || 0) > 0)
       .slice(0, 3);
 
     let train: "RAPIDE" | "LENT" | "NORMAL" = "NORMAL";
@@ -233,12 +253,12 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     if (train === "RAPIDE") {
       alerts.push("⚡ Train sélectif probable");
       if (finishers.length >= 2) alerts.push("🔥 Avantage finisseurs");
-      if ((sortedParticipants[0]?.probabiliteIA || 0) >= 20) alerts.push("⚠️ Favoris exposés");
+      if ((participants[0]?.probabiliteIA || 0) >= 20) alerts.push("⚠️ Favoris exposés");
     } else if (train === "LENT") {
       alerts.push("🐢 Train tactique probable");
       alerts.push("🎯 Avantage chevaux de tête");
-      if (leaders.length >= 1 && sortedParticipants[0]) {
-        alerts.push(`🔒 Base avantagée : ${sortedParticipants[0].numero}`);
+      if (leaders.length >= 1 && participants[0]) {
+        alerts.push(`🔒 Base avantagée : ${participants[0].numero}`);
       }
     } else {
       alerts.push("➖ Train régulier probable");
@@ -294,6 +314,7 @@ const iaProbBar = (probabiliteIA?: number, cotePMU?: number) => {
   );
 };
 
+
 const iaMiniBar = (prob?: number, cotePMU?: number) => {
   const ia = Math.max(0, Math.min(100, Number(prob || 0)))
   const pmuProb = cotePMU ? impliedProbPmu(cotePMU) : 0
@@ -319,6 +340,7 @@ const iaMiniBar = (prob?: number, cotePMU?: number) => {
   )
 }
 
+
 const valueBadgeText = (value?: number) => {
   const v = Number(value || 0)
   if (v >= 8) return "VALUE FORTE"
@@ -327,28 +349,30 @@ const valueBadgeText = (value?: number) => {
   return null
 }
 
-const lectureValueSummary = (sortedParticipants: Participant[] = []) => {
-  const sorted = [...sortedParticipants]
-    .filter((c: any) => Number.isFinite(Number(c.value || 0)))
-    .sort((a: any, b: any) => Number(b.value || 0) - Number(a.value || 0))
+const lectureValueSummary = (participants: Participant[] = []) => {
+  const sorted = [...participants]
+    .filter((c) => Number.isFinite(Number(c.value || 0)))
+    .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
 
-  const fortes = sorted.filter((c: any) => Number(c.value || 0) >= 8).slice(0, 3)
+  const fortes = sorted.filter((c) => Number(c.value || 0) >= 8).slice(0, 3)
   if (fortes.length > 0) {
-    return `Values fortes : ${fortes.map((c: any) => (c as any).numero).join(" ")}`
+    return `Values fortes : ${fortes.map((c) => c.numero).join(" ")}`
   }
 
-  const positives = sorted.filter((c: any) => Number(c.value || 0) >= 3).slice(0, 3)
+  const positives = sorted.filter((c) => Number(c.value || 0) >= 3).slice(0, 3)
   if (positives.length > 0) {
-    return `Values à suivre : ${positives.map((c: any) => (c as any).numero).join(" ")}`
+    return `Values à suivre : ${positives.map((c) => c.numero).join(" ")}`
   }
 
-  const negatives = sorted.filter((c: any) => Number(c.value || 0) <= -3).slice(0, 2)
+  const negatives = sorted.filter((c) => Number(c.value || 0) <= -3).slice(0, 2)
   if (negatives.length > 0) {
-    return `Favoris surcotés : ${negatives.map((c: any) => (c as any).numero).join(" ")}`
+    return `Favoris surcotés : ${negatives.map((c) => c.numero).join(" ")}`
   }
 
   return "Pas de value nette"
 }
+
+
 
 const pmuBar = (cote?: number) => {
     const prob = impliedProbPmu(cote);
@@ -390,18 +414,95 @@ const pmuBar = (cote?: number) => {
         <Text style={styles.topTitle}>Analyse course</Text>
       </View>
 
-            <CourseHeader data={data} styles={styles} />
+            <CourseHeader data={data} />
 
-      <CourseInsights participants={sortedParticipants} styles={styles} />
+      <View style={styles.dashboardWrap}>
+        <View style={[styles.dashboardGrid, isWide && styles.dashboardGridWide]}>
+          <View style={styles.dashboardCard}>
+            <Text style={styles.blockTitle}>SYNTHÈSE PARI</Text>
+            <Text style={styles.summaryLine}>
+              🎯 Cheval à battre : {topIa ? `${topIa.numero} ${topIa.nom}` : "-"}
+            </Text>
+            <Text style={styles.summaryLine}>
+              💰 Value principale : {topValue ? `${topValue.numero} ${topValue.nom}` : "-"}
+            </Text>
+            <Text style={styles.summaryLine}>
+              ⚠️ Tocard dangereux : {topTocard ? `${topTocard.numero} ${topTocard.nom}` : "-"}
+            </Text>
+            <Text style={styles.summaryLine}>🔥 Driver chaud : {topDriver?.driver || "-"}</Text>
+          </View>
+
+          <View style={styles.dashboardCard}>
+            <Text style={styles.blockTitle}>LECTURE DE COURSE</Text>
+            {lectureCourse().map((line, i) => (
+              <Text key={`lecture-${i}`} style={styles.dashboardText}>
+                {line}
+              </Text>
+            ))}
+
+            <View style={styles.strategyBox}>
+              <Text style={styles.strategyTitle}>STRATÉGIE CONSEILLÉE</Text>
+              <Text style={styles.dashboardText}>Base : {strategieConseil().base}</Text>
+              <Text style={styles.dashboardText}>Chances : {strategieConseil().chances}</Text>
+              <Text style={styles.dashboardText}>Outsiders : {strategieConseil().outsiders}</Text>
+              <Text style={styles.strategyGame}>{strategieConseil().jeu}</Text>
+            </View>
+          </View>
+
+          <View style={styles.dashboardCard}>
+            <Text style={styles.blockTitle}>SCAN COURSE</Text>
+            <Text style={styles.scanSection}>TOP 3 IA</Text>
+            {top3.map((c) => (
+              <Text key={`top-${c.numero}`} style={styles.dashboardText}>
+                #{c.rankIA} {c.numero} {c.nom}
+              </Text>
+            ))}
+
+            <Text style={styles.scanSection}>VALUE BETS</Text>
+            {valueBets.length ? (
+              valueBets.map((c) => (
+                <Text key={`value-${c.numero}`} style={styles.dashboardText}>
+                  {c.numero} {c.nom} • {c.value}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.dashboardText}>-</Text>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.physioBox}>
+        <Text style={styles.blockTitle}>PHYSIONOMIE DE COURSE</Text>
+        <Text style={styles.physioTrain}>
+          {physionomieCourse().train === "RAPIDE"
+            ? "⚡ Train probable : RAPIDE"
+            : physionomieCourse().train === "LENT"
+            ? "🐢 Train probable : LENT"
+            : "➖ Train probable : NORMAL"}
+        </Text>
+        <Text style={styles.physioInfo}>
+          {physionomieCourse().alerts.join(" • ")}
+        </Text>
+        <Text style={styles.physioRow}>
+          TÊTE        {physionomieCourse().leaders.map((c) => c.numero).join(" • ") || "-"}
+        </Text>
+        <Text style={styles.physioRow}>
+          ATTENTISTES {physionomieCourse().attentistes.map((c) => c.numero).join(" • ") || "-"}
+        </Text>
+        <Text style={styles.physioRow}>
+          FINISSEURS  {physionomieCourse().finishers.map((c) => c.numero).join(" • ") || "-"}
+        </Text>
+      </View>
 
       
-{sortedParticipants.map((c: any) => (
-         <CourseHorseInlineCard key={String((c as any).numero)}> 
+{sortedParticipants.map((c) => (
+         <CourseHorseInlineCard key={String(c.numero)}> 
           <View style={[styles.cardHeader,{alignItems:"center"}]}>
             <View style={styles.nameWrap}>
               {renderCasaque(c)}
               <Text style={styles.lineStats}>
-                {(c as any).numero} - {c.nom}   SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}   IA {iaProbBar((c as any).probabiliteIA, c.cotePMU)} {(c as any).probabiliteIA ?? 0}%   PMU {pmuBar(c.cotePMU)} {Math.round(impliedProbPmu(c.cotePMU))}%
+                {c.numero} - {c.nom}   SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}   IA {iaProbBar(c.probabiliteIA, c.cotePMU)} {c.probabiliteIA ?? 0}%   PMU {pmuBar(c.cotePMU)} {Math.round(impliedProbPmu(c.cotePMU))}%
               </Text>
             </View>
 
@@ -413,9 +514,9 @@ const pmuBar = (cote?: number) => {
           </View>
 
           <View style={styles.badgesRow}>
-            {(c.badges || []).slice(0, 3).map((badge: any, index: number) => (
+            {(c.badges || []).slice(0, 3).map((badge, index) => (
               <View
-                key={`${(c as any).numero}-${badge}-${index}`}
+                key={`${c.numero}-${badge}-${index}`}
                 style={[
                   styles.badge,
                   badge === "VALUE BET" && styles.badgeValue,
@@ -488,16 +589,16 @@ const pmuBar = (cote?: number) => {
                 <Text
                   style={[
                     styles.levelBadge,
-                    ((c as any).probabiliteIA || 0) >= 20
+                    (c.probabiliteIA || 0) >= 20
                       ? styles.levelFavori
-                      : ((c as any).probabiliteIA || 0) >= 10
+                      : (c.probabiliteIA || 0) >= 10
                       ? styles.levelChance
                       : styles.levelOutsider,
                   ]}
                 >
-                  {((c as any).probabiliteIA || 0) >= 20
+                  {(c.probabiliteIA || 0) >= 20
                     ? "🟢 Favori"
-                    : ((c as any).probabiliteIA || 0) >= 10
+                    : (c.probabiliteIA || 0) >= 10
                     ? "🟡 Chance"
                     : "🔴 Outsider"}
                 </Text>
@@ -506,8 +607,8 @@ const pmuBar = (cote?: number) => {
               </View>
 
               <View style={styles.alertRow}>
-                {alertTags(c).map((tag: any, index: number) => (
-                  <View key={`${(c as any).numero}-alert-${index}`} style={styles.alertPill}>
+                {alertTags(c).map((tag, index) => (
+                  <View key={`${c.numero}-alert-${index}`} style={styles.alertPill}>
                     <Text style={styles.alertText}>{tag}</Text>
                   </View>
                 ))}

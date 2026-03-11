@@ -29,8 +29,10 @@ export default function CourseScreen() {
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false)
 
+  
+
   useEffect(() => {
-    if (!reunion || !course) return;
+    let cancelled = false;
 
     const loadCourse = async () => {
       try {
@@ -39,16 +41,25 @@ export default function CourseScreen() {
         const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
         const json = await res.json();
 
-        setData(json?.data ?? json);
+        if (!cancelled) {
+          setData(json?.data ?? json);
+        }
       } catch (e) {
         console.error("Erreur chargement course:", e);
-        setError(true);
+        if (!cancelled) {
+          setError(true);
+        }
       }
     };
 
-    loadCourse();
-  }, [reunion, course]);
+    if (reunion && course) {
+      loadCourse();
+    }
 
+    return () => {
+      cancelled = true;
+    };
+  }, [reunion, course]);
 const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
   const top3 = sortedParticipants.slice(0, 3)[0];
 

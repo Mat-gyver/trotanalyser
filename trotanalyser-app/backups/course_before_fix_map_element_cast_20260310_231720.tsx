@@ -29,28 +29,8 @@ export default function CourseScreen() {
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false)
 
-  useEffect(() => {
-    if (!reunion || !course) return;
-
-    const loadCourse = async () => {
-      try {
-        setError(false);
-
-        const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
-        const json = await res.json();
-
-        setData(json?.data ?? json);
-      } catch (e) {
-        console.error("Erreur chargement course:", e);
-        setError(true);
-      }
-    };
-
-    loadCourse();
-  }, [reunion, course]);
-
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
-  const top3 = sortedParticipants.slice(0, 3)[0];
+  const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
+  const top3 = sortedParticipants.slice(0, 3);[0];
 
   const topTocard = sortedParticipants.find((c: any) =>
     (c.badges || []).includes("TOCARD IA"),
@@ -173,8 +153,8 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
 
     const lines: string[] = [];
 
-    if (top3IA && (top3IA[0]?.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA[0]?.numero}`);
-    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA[0]?.numero}`);
+    if (top3IA && (top3IA.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA.numero}`);
+    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA.numero}`);
 
     if (ecart < 10) lines.push("⚡ Course ouverte pour les places");
     else if (ecart > 20) lines.push("🎯 Course assez lisible");
@@ -188,7 +168,7 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
   };
 
   const strategieConseil = () => {
-    const base = top3IA ? `${top3IA[0]?.numero}` : "-";
+    const base = top3IA ? `${top3IA.numero}` : "-";
     const chances = sortedParticipants.slice(1, 4).map((c: any) => (c as any).numero).join(" ");
     const outsiders = sortedParticipants
       .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)

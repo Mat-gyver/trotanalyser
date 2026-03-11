@@ -29,28 +29,8 @@ export default function CourseScreen() {
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false)
 
-  useEffect(() => {
-    if (!reunion || !course) return;
-
-    const loadCourse = async () => {
-      try {
-        setError(false);
-
-        const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
-        const json = await res.json();
-
-        setData(json?.data ?? json);
-      } catch (e) {
-        console.error("Erreur chargement course:", e);
-        setError(true);
-      }
-    };
-
-    loadCourse();
-  }, [reunion, course]);
-
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
-  const top3 = sortedParticipants.slice(0, 3)[0];
+  const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
+  const top3 = sortedParticipants.slice(0, 3);[0];
 
   const topTocard = sortedParticipants.find((c: any) =>
     (c.badges || []).includes("TOCARD IA"),

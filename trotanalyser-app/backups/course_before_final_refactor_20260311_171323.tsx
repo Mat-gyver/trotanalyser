@@ -87,79 +87,19 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     return parts.slice(0, 1).join(" • ");
   };
 
-  const scoreBar = (score?: number) => {
-    const s = Math.max(0, Math.min(40, Number(score || 0)));
-    const full = Math.round(s / 4);
-    return "█".repeat(full) + "░".repeat(10 - full);
-  };
+  
 
-  const pariStars = (c: Participant) => {
-    const total =
-      (c.scoreIA || 0) +
-      (c.driverIndex || 0) +
-      (c.trainerIndex || 0) +
-      (c.retardGains || 0) +
-      Math.max(0, Math.min(10, Number(c.value || 0))) +
-      (c.confianceIA || 0) / 20;
+  
 
-    if (total >= 45) return "⭐⭐⭐⭐⭐";
-    if (total >= 34) return "⭐⭐⭐⭐";
-    if (total >= 25) return "⭐⭐⭐";
-    if (total >= 16) return "⭐⭐";
-    return "⭐";
-  };
+  
 
-  const noteColor = (n?: number) => {
-    const v = Number(n || 0);
-    if (v <= 3) return "#ff6b6b";
-    if (v <= 5) return "#f5b041";
-    if (v <= 7) return "#7DFFB3";
-    return "#37d67a";
-  };
+  
 
-  const alertTags = (c: Participant) => {
-    const tags: string[] = [];
+  
 
-    if ((c.badges || []).includes("FAVORI FRAGILE")) tags.push("⚠️ FAVORI FRAGILE");
-    if (
-      (c.badges || []).includes("TOCARD IA") ||
-      ((c.value || 0) > 3 && ((c as any).probabiliteIA || 0) <= 10)
-    ) {
-      tags.push("💣 GROS TOCARD");
-    }
-    if ((c.retardGains || 0) >= 5 && (c.scoreIA || 0) >= 12) tags.push("📈 EN PROGRÈS");
-    if ((c.driverIndex || 0) >= 8) tags.push("🔥 DRIVER CHAUD");
+  
 
-    return tags.slice(0, 2);
-  };
-
-  const getMeteoIcon = (meteo?: string) => {
-    const m = String(meteo || "").toLowerCase();
-    if (m.includes("soleil") || m.includes("ensole")) return "☀️";
-    if (m.includes("orage")) return "⛈️";
-    if (m.includes("pluie") || m.includes("averse")) return "🌧️";
-    if (m.includes("nuage") || m.includes("couvert")) return "☁️";
-    if (m.includes("brouillard") || m.includes("brume")) return "🌫️";
-    return "🌤️";
-  };
-
-  const souplesseIndex = (souplesse?: string | number) => {
-    if (typeof souplesse === "number") {
-      return Math.max(0, Math.min(4, Math.round(souplesse)));
-    }
-    const s = String(souplesse || "").toLowerCase();
-    if (s.includes("très souple") || s.includes("tres souple")) return 0;
-    if (s.includes("souple")) return 1;
-    if (s.includes("bon") || s.includes("standard") || s.includes("normal")) return 2;
-    if (s.includes("très dur") || s.includes("tres dur")) return 4;
-    if (s.includes("dur")) return 3;
-    return 2;
-  };
-
-  const souplesseLabel = (souplesse?: string | number) => {
-    if (typeof souplesse === "string" && souplesse.trim()) return souplesse;
-    return "Bon";
-  };
+  
 
   const lectureCourse = () => {
     const scores = sortedParticipants.map((c: any) => c.scoreIA || 0);
