@@ -1,104 +1,89 @@
-import { useMemo } from "react"
+import { useMemo } from "react";
+import type { CourseData, Participant } from "../types/courseScreen";
 
-export function useCourseAnalysis(data: any) {
+type EnrichedParticipant = Participant & {
+  valueSignal: number;
+  favoriFragile: boolean;
+  grosTocard: boolean;
+};
 
-  const sortedParticipants = useMemo(() => {
-    if (!data?.participants) return []
-    return [...data.participants].sort(
-      (a, b) => (b.scoreIA || 0) - (a.scoreIA || 0)
-    )
-  }, [data])
+export function useCourseAnalysis(data: CourseData | null) {
+  const participants = useMemo<Participant[]>(() => {
+    if (!Array.isArray(data?.participants)) return [];
+    return data.participants;
+  }, [data]);
 
+  const sortedParticipants = useMemo<Participant[]>(() => {
+    return [...participants].sort(
+      (a, b) => (Number(b.scoreIA) || 0) - (Number(a.scoreIA) || 0),
+    );
+  }, [participants]);
 
   const paceAnalysis = useMemo(() => {
+    const leaders = sortedParticipants.filter((p) =>
+      String(p.analyseIA || "").toLowerCase().includes("tête"),
+    );
 
-    const leaders = sortedParticipants.filter(p =>
-      String(p.analyseIA || "").toLowerCase().includes("tête")
-    )
+    const finishers = sortedParticipants.filter((p) =>
+      String(p.analyseIA || "").toLowerCase().includes("fin"),
+    );
 
-    const finishers = sortedParticipants.filter(p =>
-      String(p.analyseIA || "").toLowerCase().includes("fin")
-    )
+    let train: "RAPIDE" | "NORMAL" | "LENT" = "NORMAL";
 
-    let train = "NORMAL"
-
-    if (leaders.length >= 3) train = "RAPIDE"
-    if (leaders.length <= 1) train = "LENT"
+    if (leaders.length >= 3) train = "RAPIDE";
+    else if (leaders.length <= 1) train = "LENT";
 
     return {
-    train,
+      train,
       leaders,
-      finishers
-    }
+      finishers,
+    };
+  }, [sortedParticipants]);
 
-  }, [sortedParticipants])
+  const enrichedSortedParticipants = useMemo<EnrichedParticipant[]>(() => {
+    return sortedParticipants.map((p) => {
+      const probIA = Number((p as any).probabiliteIA || 0);
+      const cote = Number(p.cotePMU || 0);
+      const retard = Number(p.retardGains || 0);
+      const scoreIA = Number(p.scoreIA || 0);
+      const driverIndex = Number(p.driverIndex || 0);
 
-
-  const valueBets = useMemo(() => {
-
-    return sortedParticipants.filter(p => {
-
-      const probIA = p.probabiliteIA || 0
-      const cote = p.cotePMU || 0
-
-      if (!cote) return false
-
-      const probPMU = 100 / cote
-      const value = probIA - probPMU
-
-      return value > 8
-
-    })
-
-  }, [sortedParticipants])
-
-
-  const enrichedSortedParticipants = useMemo(() => {
-
-    return sortedParticipants.map(p => {
-
-      const probIA = p.probabiliteIA || 0
-      const cote = p.cotePMU || 0
-      const retard = p.retardGains || 0
-
-      const probPMU = cote ? 100 / cote : 0
-      const value = probIA - probPMU
+      const probPMU = cote > 0 ? 100 / cote : 0;
+      const value = probIA - probPMU;
 
       const favoriFragile =
-        cote <= 3 &&
-        (p.scoreIA || 0) < 15 &&
-        (p.driverIndex || 0) < 5
+        cote > 0 && cote <= 3 && scoreIA < 15 && driverIndex < 5;
 
-      const grosTocard =
-        probIA >= 10 &&
-        cote >= 20 &&
-        retard >= 5
+      const grosTocard = probIA >= 10 && cote >= 20 && retard >= 5;
 
       return {
         ...p,
         valueSignal: value,
         favoriFragile,
-        grosTocard
-      }
+        grosTocard,
+      };
+    });
+  }, [sortedParticipants]);
 
-    })
+  const valueBets = useMemo<EnrichedParticipant[]>(() => {
+    return enrichedSortedParticipants
+      .filter((p) => p.valueSignal > 8)
+      .sort((a, b) => b.valueSignal - a.valueSignal);
+  }, [enrichedSortedParticipants]);
 
-  }, [sortedParticipants])
+  const top3IA = useMemo<EnrichedParticipant[]>(() => {
+    return enrichedSortedParticipants.slice(0, 3);
+  }, [enrichedSortedParticipants]);
 
-
-    const top3IA = useMemo(() => {
-    return enrichedSortedParticipants.slice(0, 3)
-  }, [enrichedSortedParticipants])
-
-  const topValue = useMemo(() => {
-    return valueBets[0] || null
-  }, [valueBets])
+  const topValue = useMemo<EnrichedParticipant | null>(() => {
+    return valueBets.length > 0 ? valueBets[0] : null;
+  }, [valueBets]);
 
   return {
     sortedParticipants: enrichedSortedParticipants,
     top3IA,
     valueBets,
     paceAnalysis,
-    topValue
-  }
+    topValue,
+  };
 }
