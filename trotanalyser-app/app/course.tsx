@@ -1,20 +1,13 @@
-import CourseHeader from "../components/course/CourseHeader";
-import { useEffect, useMemo, useState } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import CourseSummary from "../components/course/CourseSummary";
-import CoursePhysiology from "../components/course/CoursePhysiology";
+
+import CourseHeader from "../components/course/CourseHeader";
+import CourseInsights from "../components/course/CourseInsights";
 import CourseHorseInlineCard from "../components/course/CourseHorseInlineCard";
 import { styles } from "../components/course/courseScreenStyles";
 import type { Participant, CourseData } from "../types/courseScreen";
 import { API_BASE } from "../constants/courseApiBase";
-import CourseInsights from "../components/course/CourseInsights";
 import { useCourseAnalysis } from "../hooks/useCourseAnalysis";
 
 export default function CourseScreen() {
@@ -23,60 +16,73 @@ export default function CourseScreen() {
     course?: string;
   }>();
 
-  const { width } = useWindowDimensions();
-  const isWide = width >= 600;
-
   const [data, setData] = useState<CourseData | null>(null);
-  const [error, setError] = useState(false)
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!reunion || !course) return;
+
+    let isMounted = true;
 
     const loadCourse = async () => {
       try {
         setError(false);
 
         const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
-        const json = await res.json();
 
-        setData(json?.data ?? json);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const json = await res.json();
+        const nextData = json?.data ?? json ?? null;
+
+        if (isMounted) {
+          setData(nextData);
+        }
       } catch (e) {
         console.error("Erreur chargement course:", e);
-        setError(true);
+        if (isMounted) {
+          setError(true);
+        }
       }
     };
 
     loadCourse();
+
+    return () => {
+      isMounted = false;
+    };
   }, [reunion, course]);
 
-const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(data);
-  const top3 = sortedParticipants.slice(0, 3)[0];
-
-  const topTocard = sortedParticipants.find((c: any) =>
-    (c.badges || []).includes("TOCARD IA"),
-  );
-
-  const topDriver = [...sortedParticipants].sort(
-    (a, b) => (b.driverIndex || 0) - (a.driverIndex || 0),
-  )[0];
-
-  const pronosticIa = sortedParticipants.slice(0, 5).map((c: any) => (c as any).numero).join(" - ");
+  const {
+    sortedParticipants = [],
+    top3IA,
+    valueBets,
+    topValue,
+  } = useCourseAnalysis(data);
 
   const shortFerrure = (f?: string) => {
     if (!f || f === "NR") return "NR";
     const u = String(f).toUpperCase();
+
     if (u.includes("ANTERIEURS_POSTERIEURS")) return "D4";
     if (u.includes("ANTERIEURS")) return "DA";
     if (u.includes("POSTERIEURS")) return "DP";
+
     return u;
   };
 
   const shortAnalyse = (txt?: string) => {
     if (!txt) return "";
+
     const cleaned = txt
       .replace(/Distance à confirmer\./gi, "")
       .replace(/Repères hippodrome encore limités\./gi, "")
-      .replace(/Aptitude piste et météo à confirmer avec les données hippodrome\./gi, "")
+      .replace(
+        /Aptitude piste et météo à confirmer avec les données hippodrome\./gi,
+        "",
+      )
       .trim();
 
     const parts = cleaned
@@ -120,139 +126,26 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
   const alertTags = (c: Participant) => {
     const tags: string[] = [];
 
-    if ((c.badges || []).includes("FAVORI FRAGILE")) tags.push("⚠️ FAVORI FRAGILE");
+    if ((c.badges || []).includes("FAVORI FRAGILE")) {
+      tags.push("⚠️ FAVORI FRAGILE");
+    }
+
     if (
       (c.badges || []).includes("TOCARD IA") ||
       ((c.value || 0) > 3 && ((c as any).probabiliteIA || 0) <= 10)
     ) {
       tags.push("💣 GROS TOCARD");
     }
-    if ((c.retardGains || 0) >= 5 && (c.scoreIA || 0) >= 12) tags.push("📈 EN PROGRÈS");
-    if ((c.driverIndex || 0) >= 8) tags.push("🔥 DRIVER CHAUD");
+
+    if ((c.retardGains || 0) >= 5 && (c.scoreIA || 0) >= 12) {
+      tags.push("📈 EN PROGRÈS");
+    }
+
+    if ((c.driverIndex || 0) >= 8) {
+      tags.push("🔥 DRIVER CHAUD");
+    }
 
     return tags.slice(0, 2);
-  };
-
-  const getMeteoIcon = (meteo?: string) => {
-    const m = String(meteo || "").toLowerCase();
-    if (m.includes("soleil") || m.includes("ensole")) return "☀️";
-    if (m.includes("orage")) return "⛈️";
-    if (m.includes("pluie") || m.includes("averse")) return "🌧️";
-    if (m.includes("nuage") || m.includes("couvert")) return "☁️";
-    if (m.includes("brouillard") || m.includes("brume")) return "🌫️";
-    return "🌤️";
-  };
-
-  const souplesseIndex = (souplesse?: string | number) => {
-    if (typeof souplesse === "number") {
-      return Math.max(0, Math.min(4, Math.round(souplesse)));
-    }
-    const s = String(souplesse || "").toLowerCase();
-    if (s.includes("très souple") || s.includes("tres souple")) return 0;
-    if (s.includes("souple")) return 1;
-    if (s.includes("bon") || s.includes("standard") || s.includes("normal")) return 2;
-    if (s.includes("très dur") || s.includes("tres dur")) return 4;
-    if (s.includes("dur")) return 3;
-    return 2;
-  };
-
-  const souplesseLabel = (souplesse?: string | number) => {
-    if (typeof souplesse === "string" && souplesse.trim()) return souplesse;
-    return "Bon";
-  };
-
-  const lectureCourse = () => {
-    const scores = sortedParticipants.map((c: any) => c.scoreIA || 0);
-    const max = scores.length ? Math.max(...scores) : 0;
-    const min = scores.length ? Math.min(...scores) : 0;
-    const ecart = max - min;
-
-    const outsiders = sortedParticipants
-      .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
-      .slice(0, 3);
-
-    const lines: string[] = [];
-
-    if (top3IA && (top3IA[0]?.probabiliteIA || 0) >= 25) lines.push(`🔒 Favori solide : ${top3IA[0]?.numero}`);
-    else if (top3IA) lines.push(`⚠️ Favori discutable : ${top3IA[0]?.numero}`);
-
-    if (ecart < 10) lines.push("⚡ Course ouverte pour les places");
-    else if (ecart > 20) lines.push("🎯 Course assez lisible");
-    else lines.push("🧩 Course intermédiaire");
-
-    if (outsiders.length) {
-      lines.push(`💣 Outsiders dangereux : ${outsiders.map((c: any) => (c as any).numero).join(" ")}`);
-    }
-
-    return lines.slice(0, 3);
-  };
-
-  const strategieConseil = () => {
-    const base = top3IA ? `${top3IA[0]?.numero}` : "-";
-    const chances = sortedParticipants.slice(1, 4).map((c: any) => (c as any).numero).join(" ");
-    const outsiders = sortedParticipants
-      .filter((c: any) => (c.badges || []).includes("TOCARD IA") || (c.value || 0) > 3)
-      .slice(0, 3)
-      .map((c: any) => (c as any).numero)
-      .join(" ");
-
-    let jeu = "Jeu conseillé : Couplé / 2sur4";
-    if (sortedParticipants.filter((c: any) => (c.value || 0) > 3).length >= 3) {
-      jeu = "Jeu conseillé : Quinté champ réduit";
-    } else if ((sortedParticipants[0]?.scoreIA || 0) - (sortedParticipants[3]?.scoreIA || 0) < 8) {
-      jeu = "Jeu conseillé : Trio / Multi";
-    }
-
-    return {
-      base,
-      chances: chances || "-",
-      outsiders: outsiders || "-",
-      jeu,
-    };
-  };
-
-  const physionomieCourse = () => {
-    const leaders = sortedParticipants
-      .filter((c: any) => (c.driverIndex || 0) >= 7 && (c.scoreIA || 0) >= 12)
-      .slice(0, 3);
-
-    const finishers = sortedParticipants
-      .filter((c: any) => (c.retardGains || 0) >= 4)
-      .slice(0, 3);
-
-    const attentistes = sortedParticipants
-      .filter((c: any) => (c.scoreIA || 0) < 12 && (c.value || 0) > 0)
-      .slice(0, 3);
-
-    let train: "RAPIDE" | "LENT" | "NORMAL" = "NORMAL";
-    if (leaders.length >= 3) train = "RAPIDE";
-    if (leaders.length <= 1) train = "LENT";
-
-    const alerts: string[] = [];
-
-    if (train === "RAPIDE") {
-      alerts.push("⚡ Train sélectif probable");
-      if (finishers.length >= 2) alerts.push("🔥 Avantage finisseurs");
-      if ((sortedParticipants[0]?.probabiliteIA || 0) >= 20) alerts.push("⚠️ Favoris exposés");
-    } else if (train === "LENT") {
-      alerts.push("🐢 Train tactique probable");
-      alerts.push("🎯 Avantage chevaux de tête");
-      if (leaders.length >= 1 && sortedParticipants[0]) {
-        alerts.push(`🔒 Base avantagée : ${sortedParticipants[0].numero}`);
-      }
-    } else {
-      alerts.push("➖ Train régulier probable");
-      alerts.push("🧩 Course équilibrée");
-      if (attentistes.length >= 2) alerts.push("🎲 Arrivée ouverte pour les places");
-    }
-
-    return {
-      train,
-      leaders,
-      attentistes,
-      finishers,
-      alerts: alerts.slice(0, 3),
-    };
   };
 
   const impliedProbPmu = (cote?: number) => {
@@ -261,103 +154,49 @@ const { sortedParticipants, top3IA, valueBets, topValue } = useCourseAnalysis(da
     return Math.max(0, Math.min(100, 100 / c));
   };
 
-  
-const iaProbBar = (probabiliteIA?: number, cotePMU?: number) => {
-  const iaProb = Number(probabiliteIA || 0);
-  const pmuProb = Number(cotePMU || 0) > 0 ? 100 / Number(cotePMU) : 0;
-
-  const fillColor =
-    iaProb > pmuProb ? "#22c55e" : iaProb < pmuProb ? "#ef4444" : "#d9efff";
-
-  const width = Math.max(6, Math.min(100, Math.round(iaProb)));
-
-  return (
-    <View
-      style={{
-        width: "42%",
-        height: 10,
-        borderRadius: 99,
-        overflow: "hidden",
-        backgroundColor: "rgba(255,255,255,0.10)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.08)",
-      }}
-    >
-      <View
-        style={{
-          width: `${width}%`,
-          height: "100%",
-          backgroundColor: fillColor,
-        }}
-      />
-    </View>
-  );
-};
-
-const iaMiniBar = (prob?: number, cotePMU?: number) => {
-  const ia = Math.max(0, Math.min(100, Number(prob || 0)))
-  const pmuProb = cotePMU ? impliedProbPmu(cotePMU) : 0
-
-  const color =
-    ia > pmuProb
-      ? "#22c55e"
-      : ia < pmuProb
-      ? "#ef4444"
-      : "#d9efff"
-
-  const scaled = Math.max(0, Math.min(100, ia * 0.4))
-
-  return (
-    <View style={styles.topBar}>
-      <View
-        style={[
-          styles.topFill,
-          { width: `${scaled}%`, backgroundColor: color },
-        ]}
-      />
-    </View>
-  )
-}
-
-const valueBadgeText = (value?: number) => {
-  const v = Number(value || 0)
-  if (v >= 8) return "VALUE FORTE"
-  if (v >= 3) return "VALUE"
-  if (v <= -3) return "SURCOTÉ"
-  return null
-}
-
-const lectureValueSummary = (sortedParticipants: Participant[] = []) => {
-  const sorted = [...sortedParticipants]
-    .filter((c: any) => Number.isFinite(Number(c.value || 0)))
-    .sort((a: any, b: any) => Number(b.value || 0) - Number(a.value || 0))
-
-  const fortes = sorted.filter((c: any) => Number(c.value || 0) >= 8).slice(0, 3)
-  if (fortes.length > 0) {
-    return `Values fortes : ${fortes.map((c: any) => (c as any).numero).join(" ")}`
-  }
-
-  const positives = sorted.filter((c: any) => Number(c.value || 0) >= 3).slice(0, 3)
-  if (positives.length > 0) {
-    return `Values à suivre : ${positives.map((c: any) => (c as any).numero).join(" ")}`
-  }
-
-  const negatives = sorted.filter((c: any) => Number(c.value || 0) <= -3).slice(0, 2)
-  if (negatives.length > 0) {
-    return `Favoris surcotés : ${negatives.map((c: any) => (c as any).numero).join(" ")}`
-  }
-
-  return "Pas de value nette"
-}
-
-const pmuBar = (cote?: number) => {
+  const pmuBar = (cote?: number) => {
     const prob = impliedProbPmu(cote);
     const full = Math.round(Math.max(0, Math.min(100, prob)) / 10);
     return "█".repeat(full) + "░".repeat(10 - full);
   };
 
+  const renderIaProbBar = (probabiliteIA?: number, cotePMU?: number) => {
+    const iaProb = Number(probabiliteIA || 0);
+    const pmuProb = Number(cotePMU || 0) > 0 ? 100 / Number(cotePMU) : 0;
+
+    const fillColor =
+      iaProb > pmuProb ? "#22c55e" : iaProb < pmuProb ? "#ef4444" : "#d9efff";
+
+    const width = Math.max(6, Math.min(100, Math.round(iaProb)));
+
+    return (
+      <View
+        style={{
+          width: 120,
+          height: 10,
+          borderRadius: 99,
+          overflow: "hidden",
+          backgroundColor: "rgba(255,255,255,0.10)",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+        }}
+      >
+        <View
+          style={{
+            width: `${width}%`,
+            height: "100%",
+            backgroundColor: fillColor,
+          }}
+        />
+      </View>
+    );
+  };
+
   const renderCasaque = (c: Participant) => {
-    if (c.casaque) return <Text style={styles.casaque}>{c.casaque}</Text>;
+    if (c.casaque) {
+      return <Text style={styles.casaque}>{c.casaque}</Text>;
+    }
+
     return (
       <View style={styles.casaqueBox}>
         <Text style={styles.casaqueText}>🏇</Text>
@@ -390,44 +229,70 @@ const pmuBar = (cote?: number) => {
         <Text style={styles.topTitle}>Analyse course</Text>
       </View>
 
-            <CourseHeader data={data} styles={styles} />
+      <CourseHeader data={data} styles={styles} />
 
       <CourseInsights participants={sortedParticipants} styles={styles} />
 
-      
-{sortedParticipants.map((c: any) => (
-         <CourseHorseInlineCard key={String((c as any).numero)}> 
-          <View style={[styles.cardHeader,{alignItems:"center"}]}>
+      {sortedParticipants.map((c: any) => (
+        <CourseHorseInlineCard key={String(c.numero)}>
+          <View style={[styles.cardHeader, { alignItems: "center" }]}>
             <View style={styles.nameWrap}>
               {renderCasaque(c)}
               <Text style={styles.lineStats}>
-                {(c as any).numero} - {c.nom}   SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}   IA {iaProbBar((c as any).probabiliteIA, c.cotePMU)} {(c as any).probabiliteIA ?? 0}%   PMU {pmuBar(c.cotePMU)} {Math.round(impliedProbPmu(c.cotePMU))}%
+                {c.numero} - {c.nom}
               </Text>
             </View>
-
-            
 
             <View style={styles.rankPill}>
               <Text style={styles.rankText}>#{c.rankIA || "-"}</Text>
             </View>
           </View>
 
+          <View
+            style={{
+              marginTop: 6,
+              marginBottom: 8,
+              gap: 6,
+            }}
+          >
+            <Text style={styles.lineStats}>
+              SCORE IA {scoreBar(c.scoreIA)} {c.scoreIA ?? "-"}
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <Text style={styles.lineStats}>
+                IA {c.probabiliteIA ?? 0}% • PMU {Math.round(impliedProbPmu(c.cotePMU))}
+                %
+              </Text>
+              {renderIaProbBar(c.probabiliteIA, c.cotePMU)}
+            </View>
+
+            <Text style={styles.lineStats}>PMU {pmuBar(c.cotePMU)}</Text>
+          </View>
+
           <View style={styles.badgesRow}>
             {(c.badges || []).slice(0, 3).map((badge: any, index: number) => (
               <View
-                key={`${(c as any).numero}-${badge}-${index}`}
+                key={`${c.numero}-${badge}-${index}`}
                 style={[
                   styles.badge,
                   badge === "VALUE BET" && styles.badgeValue,
                   badge === "TOP IA" && styles.badgeTop,
                   badge === "FAVORI FRAGILE" && styles.badgeFragile,
                   badge === "VALUE FORTE"
-                ? styles.badgeValueStrong
-                : badge === "VALUE"
-                ? styles.badgeValue
-                : badge === "SURCOTÉ"
-                ? styles.badgeSurcote
-                : badge === "TOCARD IA" && styles.badgeTocard,
+                    ? styles.badgeValueStrong
+                    : badge === "VALUE"
+                      ? styles.badgeValue
+                      : badge === "SURCOTÉ"
+                        ? styles.badgeSurcote
+                        : badge === "TOCARD IA" && styles.badgeTocard,
                   badge === "OUTSIDER INTÉRESSANT" && styles.badgeOutsider,
                 ]}
               >
@@ -440,12 +305,22 @@ const pmuBar = (cote?: number) => {
             <View style={styles.cardLeft}>
               <Text style={styles.lineCompact}>
                 {c.driver || "NR"}{" "}
-                <Text style={[styles.noteInline, { color: noteColor(c.driverIndex) }]}>
+                <Text
+                  style={[
+                    styles.noteInline,
+                    { color: noteColor(c.driverIndex) },
+                  ]}
+                >
                   ({c.driverIndex ?? 0}/10)
                 </Text>
                 {" / "}
                 {c.entraineur || "NR"}{" "}
-                <Text style={[styles.noteInline, { color: noteColor(c.trainerIndex) }]}>
+                <Text
+                  style={[
+                    styles.noteInline,
+                    { color: noteColor(c.trainerIndex) },
+                  ]}
+                >
                   ({c.trainerIndex ?? 0}/10)
                 </Text>
                 {" • "}
@@ -460,46 +335,40 @@ const pmuBar = (cote?: number) => {
             </View>
 
             <View style={styles.cardRight}>
-              
-              <Text style={styles.name}>
-                
-              </Text>
-
               <Text style={styles.scoreMeta}>
-                 Value{" "}
+                Value{" "}
                 <Text
                   style={[
                     styles.valueText,
                     (c.value || 0) > 3
                       ? styles.valueStrong
                       : (c.value || 0) > 0
-                      ? styles.valuePositive
-                      : styles.valueNegative,
+                        ? styles.valuePositive
+                        : styles.valueNegative,
                   ]}
                 >
                   {c.value ?? "-"}
-                </Text>{" "}
                 </Text>
-
-              <Text style={styles.microStats}>
-                G{c.retardGains ?? 0}
               </Text>
-<View style={styles.inlineRow}>
+
+              <Text style={styles.microStats}>G{c.retardGains ?? 0}</Text>
+
+              <View style={styles.inlineRow}>
                 <Text
                   style={[
                     styles.levelBadge,
-                    ((c as any).probabiliteIA || 0) >= 20
+                    (c.probabiliteIA || 0) >= 20
                       ? styles.levelFavori
-                      : ((c as any).probabiliteIA || 0) >= 10
-                      ? styles.levelChance
-                      : styles.levelOutsider,
+                      : (c.probabiliteIA || 0) >= 10
+                        ? styles.levelChance
+                        : styles.levelOutsider,
                   ]}
                 >
-                  {((c as any).probabiliteIA || 0) >= 20
+                  {(c.probabiliteIA || 0) >= 20
                     ? "🟢 Favori"
-                    : ((c as any).probabiliteIA || 0) >= 10
-                    ? "🟡 Chance"
-                    : "🔴 Outsider"}
+                    : (c.probabiliteIA || 0) >= 10
+                      ? "🟡 Chance"
+                      : "🔴 Outsider"}
                 </Text>
 
                 <Text style={styles.pariIndex}>Indice Pari : {pariStars(c)}</Text>
@@ -507,7 +376,7 @@ const pmuBar = (cote?: number) => {
 
               <View style={styles.alertRow}>
                 {alertTags(c).map((tag: any, index: number) => (
-                  <View key={`${(c as any).numero}-alert-${index}`} style={styles.alertPill}>
+                  <View key={`${c.numero}-alert-${index}`} style={styles.alertPill}>
                     <Text style={styles.alertText}>{tag}</Text>
                   </View>
                 ))}

@@ -1,31 +1,27 @@
-import React from "react";
 import { View, Text } from "react-native";
+import type { CourseData } from "../../types/courseScreen";
 
 type Props = {
-  data?: any;
-  styles?: any;
+  data?: CourseData | null;
+  styles: any;
 };
 
 export default function CourseHeader({ data, styles }: Props) {
-  if (!data) {
-    return null;
-  }
+  if (!data) return null;
 
-  const safeStyles = styles || {};
-
-  const hippodrome = data?.hippodrome ?? "-";
-  const reunion = data?.reunion ?? "-";
-  const numero = data?.numero ?? "-";
-  const distance = data?.distance ?? "-";
-  const partants = data?.partants ?? "-";
+  const hippodrome = data.hippodrome ?? "-";
+  const reunion = data.reunion ?? "-";
+  const numero = data.numero ?? "-";
+  const distance = data.distance ?? "-";
+  const partants = data.partants ?? "-";
 
   return (
-    <View style={safeStyles.topCard}>
-      <Text style={safeStyles.courseTitle}>
+    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 }}>
+      <Text style={styles.courseCode}>
         {hippodrome} — R{reunion}C{numero}
       </Text>
 
-      <Text style={safeStyles.courseMeta}>
+      <Text style={styles.meta}>
         {distance}m • {partants} partants
       </Text>
     </View>
