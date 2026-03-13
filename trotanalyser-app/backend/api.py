@@ -342,7 +342,10 @@ def course(reunion: str, course: str):
     r = reunion.replace("R","")
     c = course.replace("C","")
 
+    try:
     data = pmu(f"{d}/R{r}/C{c}/participants")
+except Exception as e:
+    return {"error": "pmu_fetch_failed", "detail": str(e)}
 
     chevaux = []
 
