@@ -300,12 +300,6 @@ def build_analyse_ia(musique, ferrure, driver, entraineur, score_ia, probabilite
 
 @app.get("/health")
 def health():
-    
-    participants = sorted(participants, key=lambda x: x.get("scoreIA", 0), reverse=True)
-
-    for i, c in enumerate(participants):
-        c["rankIA"] = i + 1
-
     return {"ok": True}
 
 @app.get("/api/programme/today")
