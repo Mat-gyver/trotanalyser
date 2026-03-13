@@ -11,10 +11,13 @@ import { API_BASE } from "../constants/courseApiBase";
 import { useCourseAnalysis } from "../hooks/useCourseAnalysis";
 
 export default function CourseScreen() {
-  const { reunion, course } = useLocalSearchParams<{
-    reunion?: string;
-    course?: string;
-  }>();
+  const params = useLocalSearchParams();
+
+  const reunion =
+    typeof params.reunion === "string" ? params.reunion : undefined;
+
+  const course =
+    typeof params.course === "string" ? params.course : undefined;
 
   const [data, setData] = useState<CourseData | null>(null);
   const [error, setError] = useState(false);
@@ -132,7 +135,7 @@ export default function CourseScreen() {
 
     if (
       (c.badges || []).includes("TOCARD IA") ||
-      ((c.value || 0) > 3 && ((c as any).probabiliteIA || 0) <= 10)
+      ((c.value || 0) > 3 && (c.probabiliteIA || 0) <= 10)
     ) {
       tags.push("💣 GROS TOCARD");
     }
@@ -204,6 +207,14 @@ export default function CourseScreen() {
     );
   };
 
+  if (!reunion || !course) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>Paramètres de course manquants</Text>
+      </View>
+    );
+  }
+
   if (error) {
     return (
       <View style={styles.center}>
@@ -233,7 +244,7 @@ export default function CourseScreen() {
 
       <CourseInsights participants={sortedParticipants} styles={styles} />
 
-      {sortedParticipants.map((c: any) => (
+      {sortedParticipants.map((c: Participant) => (
         <CourseHorseInlineCard key={String(c.numero)}>
           <View style={[styles.cardHeader, { alignItems: "center" }]}>
             <View style={styles.nameWrap}>
@@ -268,8 +279,8 @@ export default function CourseScreen() {
               }}
             >
               <Text style={styles.lineStats}>
-                IA {c.probabiliteIA ?? 0}% • PMU {Math.round(impliedProbPmu(c.cotePMU))}
-                %
+                IA {c.probabiliteIA ?? 0}% • PMU{" "}
+                {Math.round(impliedProbPmu(c.cotePMU))}%
               </Text>
               {renderIaProbBar(c.probabiliteIA, c.cotePMU)}
             </View>
@@ -278,7 +289,7 @@ export default function CourseScreen() {
           </View>
 
           <View style={styles.badgesRow}>
-            {(c.badges || []).slice(0, 3).map((badge: any, index: number) => (
+            {(c.badges || []).slice(0, 3).map((badge: string, index: number) => (
               <View
                 key={`${c.numero}-${badge}-${index}`}
                 style={[
@@ -375,7 +386,7 @@ export default function CourseScreen() {
               </View>
 
               <View style={styles.alertRow}>
-                {alertTags(c).map((tag: any, index: number) => (
+                {alertTags(c).map((tag: string, index: number) => (
                   <View key={`${c.numero}-alert-${index}`} style={styles.alertPill}>
                     <Text style={styles.alertText}>{tag}</Text>
                   </View>
@@ -387,4 +398,4 @@ export default function CourseScreen() {
       ))}
     </ScrollView>
   );
-}
+  }
