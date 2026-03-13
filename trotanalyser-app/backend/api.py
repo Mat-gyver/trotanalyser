@@ -307,7 +307,10 @@ def health():
 def programme():
 
     d = today()
+try:
     data = pmu(d)
+except Exception as e:
+    return {"error": "pmu_fetch_failed", "detail": str(e)}
 
     reunions = []
 
