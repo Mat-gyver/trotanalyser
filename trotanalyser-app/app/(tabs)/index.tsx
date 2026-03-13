@@ -41,18 +41,25 @@ export default function ReunionsScreen() {
     try {
       setError("");
 
-      // cache mobile
       const cache = await AsyncStorage.getItem("reunions_cache");
-
       if (cache) {
-        const parsed = JSON.parse(cache);
-        setReunions(parsed);
+        try {
+          const parsed = JSON.parse(cache);
+          if (Array.isArray(parsed)) {
+            setReunions(parsed);
+          }
+        } catch {
+          await AsyncStorage.removeItem("reunions_cache");
+        }
       }
 
       const res = await fetch(`${API_BASE}/api/programme/today`);
-      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
 
-      const data = json.reunions || [];
+      const json = await res.json();
+      const data = Array.isArray(json.reunions) ? json.reunions : [];
 
       const enriched = await Promise.all(
         data.map(async (reunion: any) => {
@@ -62,9 +69,15 @@ export default function ReunionsScreen() {
                 const resCourse = await fetch(
                   `${API_BASE}/api/course/${course.reunion}/${course.course}`
                 );
-                const jsonCourse = await resCourse.json();
 
-                const participants = jsonCourse.participants || [];
+                if (!resCourse.ok) {
+                  throw new Error(`HTTP ${resCourse.status}`);
+                }
+
+                const jsonCourse = await resCourse.json();
+                const participants = Array.isArray(jsonCourse.participants)
+                  ? jsonCourse.participants
+                  : [];
 
                 const values = participants
                   .map((p: any) => {
@@ -80,13 +93,11 @@ export default function ReunionsScreen() {
                   })
                   .filter((v: number | null): v is number => v !== null);
 
-                const valueMax = values.length ? Math.max(...values) : 0;
-
                 return {
                   ...course,
-                  valueMax,
+                  valueMax: values.length ? Math.max(...values) : 0,
                 };
-              } catch (e) {
+              } catch {
                 return {
                   ...course,
                   valueMax: 0,
@@ -103,13 +114,9 @@ export default function ReunionsScreen() {
       );
 
       setReunions(enriched);
-
-      await AsyncStorage.setItem(
-        "reunions_cache",
-        JSON.stringify(enriched)
-      );
+      await AsyncStorage.setItem("reunions_cache", JSON.stringify(enriched));
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -170,7 +177,6 @@ export default function ReunionsScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.courseHeader}>
                     <Text style={styles.courseTitle}>{course.titre}</Text>
-
                     {typeof course.valueMax === "number" &&
                       course.valueMax >= 8 && (
                         <Text style={styles.valueBadge}>
