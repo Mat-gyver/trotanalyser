@@ -21,7 +21,8 @@ def today():
 def pmu(path):
     url = f"{PMU_BASE}/{path}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
+    r.raise_for_status()
     return r.json()
 
 def score(m):
