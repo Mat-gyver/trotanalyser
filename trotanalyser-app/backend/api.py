@@ -25,7 +25,10 @@ def pmu(path):
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=15)
     r.raise_for_status()
-    return r.json()
+    try:
+        return r.json()
+    except Exception:
+        raise ValueError(f"Réponse PMU non JSON pour {url}")
 
 
 def score(m):
@@ -128,7 +131,6 @@ def analyse_piste_meteo(distance=None, hippodrome=None):
         d = 0
 
     h = (hippodrome or "").upper()
-
     notes = []
 
     if d >= 2850:
@@ -197,6 +199,7 @@ def retard_gains_index(age, gains, score_ia):
         age_n = int(age)
     except Exception:
         age_n = 0
+
     try:
         g = float(str(gains).replace(" ", "").replace(",", "."))
     except Exception:
@@ -273,17 +276,27 @@ def outsider_interessant(cote_pmu, score_ia, value, confiance_ia):
     return c >= 8 and score_ia >= 12 and value > 0 and confiance_ia >= 48
 
 
-def badges_turf(c):
+def badges_turf(cheval):
     badges = []
-    if c.get("rankIA") == 1:
+    if cheval.get("rankIA") == 1:
         badges.append("TOP IA")
-    if c.get("value", 0) > 0.4:
+    if cheval.get("value", 0) > 0.4:
         badges.append("VALUE BET")
-    if fragile_favori(c.get("cotePMU"), c.get("scoreIA", 0), c.get("confianceIA", 0)):
+    if fragile_favori(cheval.get("cotePMU"), cheval.get("scoreIA", 0), cheval.get("confianceIA", 0)):
         badges.append("FAVORI FRAGILE")
-    if tocard_ia(c.get("cotePMU"), c.get("scoreIA", 0), c.get("value", 0), c.get("retardGains", 0)):
+    if tocard_ia(
+        cheval.get("cotePMU"),
+        cheval.get("scoreIA", 0),
+        cheval.get("value", 0),
+        cheval.get("retardGains", 0),
+    ):
         badges.append("TOCARD IA")
-    if outsider_interessant(c.get("cotePMU"), c.get("scoreIA", 0), c.get("value", 0), c.get("confianceIA", 0)):
+    if outsider_interessant(
+        cheval.get("cotePMU"),
+        cheval.get("scoreIA", 0),
+        cheval.get("value", 0),
+        cheval.get("confianceIA", 0),
+    ):
         badges.append("OUTSIDER INTÉRESSANT")
     return badges
 
@@ -344,26 +357,26 @@ def programme():
 
     reunions = []
 
-    for r in reunions_data:
+    for reunion_data in reunions_data:
         courses = []
 
-        for c in r.get("courses", []):
+        for course_data in reunion_data.get("courses", []):
             courses.append(
                 {
                     "valueMax": 0,
-                    "reunion": f"R{r.get('numOfficiel')}",
-                    "course": f"C{c.get('numOrdre')}",
-                    "titre": f"R{r.get('numOfficiel')} C{c.get('numOrdre')} - {c.get('libelle', '')}",
-                    "distance": c.get("distance"),
-                    "partants": c.get("nombreDeclaresPartants"),
+                    "reunion": f"R{reunion_data.get('numOfficiel')}",
+                    "course": f"C{course_data.get('numOrdre')}",
+                    "titre": f"R{reunion_data.get('numOfficiel')} C{course_data.get('numOrdre')} - {course_data.get('libelle', '')}",
+                    "distance": course_data.get("distance"),
+                    "partants": course_data.get("nombreDeclaresPartants"),
                 }
             )
 
-        hippodrome = r.get("hippodrome") or {}
+        hippodrome = reunion_data.get("hippodrome") or {}
 
         reunions.append(
             {
-                "reunion": f"R{r.get('numOfficiel')}",
+                "reunion": f"R{reunion_data.get('numOfficiel')}",
                 "hippodrome": hippodrome.get("libelleCourt", ""),
                 "courses": courses,
             }
@@ -387,32 +400,32 @@ def course(reunion: str, course: str):
     participants = data.get("participants", [])
     chevaux = []
 
-    for p in participants:
-        musique = p.get("musique", "")
+    for participant in participants:
+        musique = participant.get("musique", "")
 
         chevaux.append(
             {
-                "numero": p.get("numPmu"),
-                "nom": p.get("nom"),
-                "driver": p.get("driver"),
-                "entraineur": p.get("entraineur"),
-                "ferrure": p.get("ferrure") or p.get("deferre") or p.get("chaussure") or "NR",
+                "numero": participant.get("numPmu"),
+                "nom": participant.get("nom"),
+                "driver": participant.get("driver"),
+                "entraineur": participant.get("entraineur"),
+                "ferrure": participant.get("ferrure") or participant.get("deferre") or participant.get("chaussure") or "NR",
                 "musique": musique,
-                "corde": p.get("placeCorde"),
-                "age": p.get("age"),
-                "gains": p.get("gains"),
-                "sexe": p.get("sexe"),
+                "corde": participant.get("placeCorde"),
+                "age": participant.get("age"),
+                "gains": participant.get("gains"),
+                "sexe": participant.get("sexe"),
                 "scoreIA": score(musique),
                 "cotePMU": (
-                    (p.get("dernierRapportDirect") or {}).get("rapport")
-                    if isinstance(p.get("dernierRapportDirect"), dict)
-                    else p.get("dernierRapportDirect")
+                    (participant.get("dernierRapportDirect") or {}).get("rapport")
+                    if isinstance(participant.get("dernierRapportDirect"), dict)
+                    else participant.get("dernierRapportDirect")
                 ),
                 "analyseIA": "",
             }
         )
 
-    total_score = sum(c.get("scoreIA", 0) for c in chevaux)
+    total_score = sum(cheval.get("scoreIA", 0) for cheval in chevaux)
 
     for cheval in chevaux:
         prob = probabilite_from_score(cheval.get("scoreIA", 0), total_score)
@@ -458,7 +471,11 @@ def course(reunion: str, course: str):
             (data.get("hippodrome") or {}).get("libelleCourt", data.get("hippodrome")),
         )
 
-    chevaux = sorted(chevaux, key=lambda x: x.get("scoreIA", 0), reverse=True)
+    chevaux = sorted(
+        chevaux,
+        key=lambda x: (x.get("scoreIA", 0), x.get("confianceIA", 0), x.get("value", 0)),
+        reverse=True,
+    )
 
     for i, cheval in enumerate(chevaux):
         cheval["rankIA"] = i + 1
