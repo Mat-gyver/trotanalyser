@@ -10,13 +10,15 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 def today():
     return datetime.now().strftime("%d%m%Y")
+
 
 def pmu(path):
     url = f"{PMU_BASE}/{path}"
@@ -24,6 +26,7 @@ def pmu(path):
     r = requests.get(url, headers=headers, timeout=15)
     r.raise_for_status()
     return r.json()
+
 
 def score(m):
     if not m:
@@ -79,8 +82,15 @@ def analyse_driver(driver):
         return "driver non renseigné"
 
     top_drivers = [
-        "RAFFIN", "ABRIVARD", "BAZIRE", "THOMAIN", "NIVARD",
-        "GOOP", "ROCHARD", "LAGADEUC", "PLOQUIN"
+        "RAFFIN",
+        "ABRIVARD",
+        "BAZIRE",
+        "THOMAIN",
+        "NIVARD",
+        "GOOP",
+        "ROCHARD",
+        "LAGADEUC",
+        "PLOQUIN",
     ]
 
     d = driver.upper()
@@ -95,8 +105,13 @@ def analyse_entraineur(entraineur):
         return "entraîneur non renseigné"
 
     top_trainers = [
-        "BAZIRE", "ABRIVARD", "MARMION", "DUVALDESTIN",
-        "ALLAIRE", "THOMAIN", "HENRY"
+        "BAZIRE",
+        "ABRIVARD",
+        "MARMION",
+        "DUVALDESTIN",
+        "ALLAIRE",
+        "THOMAIN",
+        "HENRY",
     ]
 
     e = entraineur.upper()
@@ -273,7 +288,17 @@ def badges_turf(c):
     return badges
 
 
-def build_analyse_ia(musique, ferrure, driver, entraineur, score_ia, probabilite_ia, value, distance=None, hippodrome=None):
+def build_analyse_ia(
+    musique,
+    ferrure,
+    driver,
+    entraineur,
+    score_ia,
+    probabilite_ia,
+    value,
+    distance=None,
+    hippodrome=None,
+):
     tendances = []
 
     tendances.append(analyse_forme(musique).capitalize())
@@ -299,129 +324,150 @@ def build_analyse_ia(musique, ferrure, driver, entraineur, score_ia, probabilite
 
     return ". ".join(tendances) + "."
 
+
 @app.get("/health")
 def health():
     return {"ok": True}
 
+
 @app.get("/api/programme/today")
 def programme():
-
     d = today()
-try:
-    data = pmu(d)
-except Exception as e:
-    return {"error": "pmu_fetch_failed", "detail": str(e)}
+
+    try:
+        data = pmu(d)
+    except Exception as e:
+        return {"error": "pmu_fetch_failed", "detail": str(e)}
+
+    programme_data = data.get("programme", {})
+    reunions_data = programme_data.get("reunions", [])
 
     reunions = []
 
-    for r in data["programme"]["reunions"]:
-
+    for r in reunions_data:
         courses = []
 
-        for c in r["courses"]:
+        for c in r.get("courses", []):
+            courses.append(
+                {
+                    "valueMax": 0,
+                    "reunion": f"R{r.get('numOfficiel')}",
+                    "course": f"C{c.get('numOrdre')}",
+                    "titre": f"R{r.get('numOfficiel')} C{c.get('numOrdre')} - {c.get('libelle', '')}",
+                    "distance": c.get("distance"),
+                    "partants": c.get("nombreDeclaresPartants"),
+                }
+            )
 
-            courses.append({
-                "valueMax": 0,
-                "reunion": f"R{r['numOfficiel']}",
-                "course": f"C{c['numOrdre']}",
-                "titre": f"R{r['numOfficiel']} C{c['numOrdre']} - {c['libelle']}",
-                "distance": c["distance"],
-                "partants": c["nombreDeclaresPartants"]
-            })
+        hippodrome = r.get("hippodrome") or {}
 
-        reunions.append({
-            "reunion": f"R{r['numOfficiel']}",
-            "hippodrome": r["hippodrome"]["libelleCourt"],
-            "courses": courses
-        })
+        reunions.append(
+            {
+                "reunion": f"R{r.get('numOfficiel')}",
+                "hippodrome": hippodrome.get("libelleCourt", ""),
+                "courses": courses,
+            }
+        )
 
     return {"date": d, "reunions": reunions}
 
+
 @app.get("/api/course/{reunion}/{course}")
 def course(reunion: str, course: str):
-
     d = today()
 
-    r = reunion.replace("R","")
-    c = course.replace("C","")
+    r = reunion.replace("R", "")
+    c = course.replace("C", "")
 
     try:
         data = pmu(f"{d}/R{r}/C{c}/participants")
-except Exception as e:
-    return {"error": "pmu_fetch_failed", "detail": str(e)}
+    except Exception as e:
+        return {"error": "pmu_fetch_failed", "detail": str(e)}
 
+    participants = data.get("participants", [])
     chevaux = []
 
-    for p in data["participants"]:
+    for p in participants:
+        musique = p.get("musique", "")
 
-        musique = p.get("musique","")
-
-       chevaux.append({
-            "numero": p.get("numPmu"),
-            "nom": p.get("nom"),
-            "driver": p.get("driver"),
-            "entraineur": p.get("entraineur"),
-            "ferrure": p.get("ferrure") or p.get("deferre") or p.get("chaussure") or "NR",
-            "musique": musique,
-            "corde": p.get("placeCorde"),
-            "age": p.get("age"),
-            "gains": p.get("gains"),
-            "sexe": p.get("sexe"),
-            "scoreIA": score(musique),
-            "cotePMU": (p.get("dernierRapportDirect") or {}).get("rapport") if isinstance(p.get("dernierRapportDirect"), dict) else p.get("dernierRapportDirect"),
-            "analyseIA": "",
-        }) 
+        chevaux.append(
+            {
+                "numero": p.get("numPmu"),
+                "nom": p.get("nom"),
+                "driver": p.get("driver"),
+                "entraineur": p.get("entraineur"),
+                "ferrure": p.get("ferrure") or p.get("deferre") or p.get("chaussure") or "NR",
+                "musique": musique,
+                "corde": p.get("placeCorde"),
+                "age": p.get("age"),
+                "gains": p.get("gains"),
+                "sexe": p.get("sexe"),
+                "scoreIA": score(musique),
+                "cotePMU": (
+                    (p.get("dernierRapportDirect") or {}).get("rapport")
+                    if isinstance(p.get("dernierRapportDirect"), dict)
+                    else p.get("dernierRapportDirect")
+                ),
+                "analyseIA": "",
+            }
+        )
 
     total_score = sum(c.get("scoreIA", 0) for c in chevaux)
 
-    for c in chevaux:
-        prob = probabilite_from_score(c.get("scoreIA", 0), total_score)
+    for cheval in chevaux:
+        prob = probabilite_from_score(cheval.get("scoreIA", 0), total_score)
         cote_ia = round(100 / prob, 2) if prob > 0 else 100.0
-        cote_pmu = c.get("cotePMU") or 0
+
+        cote_pmu = cheval.get("cotePMU") or 0
         try:
             cote_pmu = float(cote_pmu)
         except Exception:
             cote_pmu = 0.0
 
         value = round(cote_pmu - cote_ia, 2)
-        confiance = confiance_from_score(c.get("scoreIA", 0))
-
-        c["probabiliteIA"] = prob
-        c["coteIA"] = cote_ia
-        c["value"] = value
-        c["confianceIA"] = confiance
-        c["driverIndex"] = driver_index(c.get("driver"))
-        c["trainerIndex"] = trainer_index(c.get("entraineur"))
-        c["retardGains"] = retard_gains_index(c.get("age"), c.get("gains"), c.get("scoreIA", 0))
-        c["dataTurfPro"] = build_data_turf_pro(
-            c.get("driver"),
-            c.get("entraineur"),
-            c.get("age"),
-            c.get("gains"),
-            c.get("scoreIA", 0),
+        confiance = confiance_from_score(cheval.get("scoreIA", 0))
+        retard_gains = retard_gains_index(
+            cheval.get("age"),
+            cheval.get("gains"),
+            cheval.get("scoreIA", 0),
         )
-        c["analyseIA"] = build_analyse_ia(
-            c.get("musique"),
-            c.get("ferrure"),
-            c.get("driver"),
-            c.get("entraineur"),
-            c.get("scoreIA", 0),
+
+        cheval["probabiliteIA"] = prob
+        cheval["coteIA"] = cote_ia
+        cheval["value"] = value
+        cheval["confianceIA"] = confiance
+        cheval["driverIndex"] = driver_index(cheval.get("driver"))
+        cheval["trainerIndex"] = trainer_index(cheval.get("entraineur"))
+        cheval["retardGains"] = retard_gains
+        cheval["dataTurfPro"] = build_data_turf_pro(
+            cheval.get("driver"),
+            cheval.get("entraineur"),
+            cheval.get("age"),
+            cheval.get("gains"),
+            cheval.get("scoreIA", 0),
+        )
+        cheval["analyseIA"] = build_analyse_ia(
+            cheval.get("musique"),
+            cheval.get("ferrure"),
+            cheval.get("driver"),
+            cheval.get("entraineur"),
+            cheval.get("scoreIA", 0),
             prob,
             value,
             data.get("distance"),
-            data.get("hippodrome"),
+            (data.get("hippodrome") or {}).get("libelleCourt", data.get("hippodrome")),
         )
 
     chevaux = sorted(chevaux, key=lambda x: x.get("scoreIA", 0), reverse=True)
 
-    for i, c in enumerate(chevaux):
-        c["rankIA"] = i + 1
+    for i, cheval in enumerate(chevaux):
+        cheval["rankIA"] = i + 1
 
-    for c in chevaux:
-        c["badges"] = badges_turf(c)
+    for cheval in chevaux:
+        cheval["badges"] = badges_turf(cheval)
 
     return {
         "reunion": reunion,
         "course": course,
-        "participants": chevaux
+        "participants": chevaux,
     }
