@@ -358,6 +358,7 @@ def course(reunion: str, course: str):
             "musique": musique,
             "corde": p.get("placeCorde"),
             "age": p.get("age"),
+            "gains": p.get("gains"),
             "sexe": p.get("sexe"),
             "scoreIA": score(musique),
                 "probabiliteIA": max(1, min(100, score(musique) + 50)),
