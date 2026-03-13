@@ -346,7 +346,7 @@ def course(reunion: str, course: str):
     c = course.replace("C","")
 
     try:
-    data = pmu(f"{d}/R{r}/C{c}/participants")
+        data = pmu(f"{d}/R{r}/C{c}/participants")
 except Exception as e:
     return {"error": "pmu_fetch_failed", "detail": str(e)}
 
