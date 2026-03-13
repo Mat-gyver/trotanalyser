@@ -349,7 +349,7 @@ def course(reunion: str, course: str):
 
         musique = p.get("musique","")
 
-        chevaux.append({
+       chevaux.append({
             "numero": p.get("numPmu"),
             "nom": p.get("nom"),
             "driver": p.get("driver"),
@@ -361,12 +361,9 @@ def course(reunion: str, course: str):
             "gains": p.get("gains"),
             "sexe": p.get("sexe"),
             "scoreIA": score(musique),
-                "probabiliteIA": max(1, min(100, score(musique) + 50)),
-                "coteIA": round(100 / max(1, min(100, score(musique) + 50)), 2),
-                "cotePMU": (p.get("dernierRapportDirect") or {}).get("rapport") if isinstance(p.get("dernierRapportDirect"), dict) else p.get("dernierRapportDirect"),
-                "analyseIA": "",
-                "value": round((((p.get("dernierRapportDirect") or {}).get("rapport") if isinstance(p.get("dernierRapportDirect"), dict) else p.get("dernierRapportDirect")) or 0) - round(100 / max(1, min(100, score(musique) + 50)), 2), 2)
-        })
+            "cotePMU": (p.get("dernierRapportDirect") or {}).get("rapport") if isinstance(p.get("dernierRapportDirect"), dict) else p.get("dernierRapportDirect"),
+            "analyseIA": "",
+        }) 
 
     total_score = sum(c.get("scoreIA", 0) for c in chevaux)
 
