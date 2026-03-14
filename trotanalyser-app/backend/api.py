@@ -6,8 +6,12 @@ from context import extract_course_context, find_reunion_and_course
 from scoring import base_score_musique, regularite_index, indice_forme_trot
 from badges import badges_turf
 from synthesis import build_course_synthesis
+from stats_db import init_db
+from stats_engine import get_driver_stats_12m, get_trainer_stats_12m
 
 app = FastAPI()
+
+init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,7 +29,6 @@ def health():
 
 @app.get("/api/course/{reunion}/{course}")
 def course(reunion: str, course: str):
-
     d = today()
     r = reunion.replace("R", "")
     c = course.replace("C", "")
@@ -38,10 +41,11 @@ def course(reunion: str, course: str):
     context = extract_course_context(participants_data, reunion_data, course_data)
 
     participants = participants_data.get("participants", [])
-
     chevaux = []
 
     for p in participants:
+        driver_stats = get_driver_stats_12m(p.get("driver"))
+        trainer_stats = get_trainer_stats_12m(p.get("entraineur"))
 
         cheval = {
             "numero": p.get("numPmu"),
@@ -50,6 +54,10 @@ def course(reunion: str, course: str):
             "entraineur": p.get("entraineur"),
             "musique": p.get("musique"),
             "ferrure": p.get("ferrure"),
+            "driverStats12m": driver_stats,
+            "trainerStats12m": trainer_stats,
+            "driverIndex12m": driver_stats["index12m"],
+            "trainerIndex12m": trainer_stats["index12m"],
         }
 
         cheval["scoreIA"] = base_score_musique(cheval["musique"])
@@ -61,7 +69,6 @@ def course(reunion: str, course: str):
     chevaux = sorted(chevaux, key=lambda x: x["scoreIA"], reverse=True)
 
     for i, cheval in enumerate(chevaux):
-
         cheval["rankIA"] = i + 1
         cheval["badges"] = badges_turf(cheval)
 
@@ -70,6 +77,11 @@ def course(reunion: str, course: str):
         "course": course,
         "hippodrome": context["hippodrome"],
         "distance": context["distance"],
+        "meteo": context.get("meteo"),
+        "temperature": context.get("temperature"),
+        "vent": context.get("vent"),
+        "souplesse": context.get("souplesse"),
+        "partants": len(chevaux),
         "participants": chevaux,
         "synthesis": build_course_synthesis(chevaux),
     }
