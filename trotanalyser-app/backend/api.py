@@ -989,16 +989,14 @@ def course(reunion: str, course: str):
         cheval["indicePari"] = indice_pari(cheval)
 
     return {
-        "reunion": reunion,
-        "course": course,
-        "hippodrome": context["hippodrome"],
-        "distance": data.get("distance"),
-        "partants": len(chevaux),
-        "meteo": context["meteo"],
-        "temperature": context["temperature"],
-        "vent": context["vent"],
-        "souplesse": context["souplesse"],
-        "niveauCourse": niveau_course,
-        "participants": chevaux,
-        "synthesis": build_course_synthesis(chevaux),
+    "reunion": reunion,
+    "course": course,
+    "hippodrome": reunion_data.get("hippodrome", ""),
+    "distance": course_data.get("distance"),
+    "partants": course_data.get("partants", len(participants)),
+    "meteo": course_data.get("meteo"),
+    "temperature": course_data.get("temperature"),
+    "vent": course_data.get("vent"),
+    "souplesse": course_data.get("souplesse"),
+    "participants": participants,
     }
