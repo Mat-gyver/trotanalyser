@@ -31,5 +31,4 @@ export type CourseData = {
   distance?: string | number;
   discipline?: string;
   participants?: Participant[];
-  [key: string]: any;
 };
