@@ -547,8 +547,8 @@ def course(reunion: str, course: str):
         cheval["rankIA"] = i + 1
 
     for cheval in chevaux:
-    cheval["badges"] = badges_turf(cheval)
-    cheval["indicePari"] = indice_pari(cheval)
+        cheval["badges"] = badges_turf(cheval)
+        cheval["indicePari"] = indice_pari(cheval)
 
     hippodrome = data.get("hippodrome") or {}
     hippodrome_label = (
