@@ -10,9 +10,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_BASE } from "../../constants/courseApiBase";
+
+import { assertApiBase } from "../../constants/courseApiBase";
 
 type Course = {
   reunion: string;
@@ -41,6 +41,8 @@ export default function ReunionsScreen() {
     try {
       setError("");
 
+      const base = assertApiBase();
+
       const cache = await AsyncStorage.getItem("reunions_cache");
       if (cache) {
         try {
@@ -53,57 +55,71 @@ export default function ReunionsScreen() {
         }
       }
 
-      const res = await fetch(`${API_BASE}/api/programme/today`);
+      const res = await fetch(`${base}/api/programme/today`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
 
       const json = await res.json();
-      const data = Array.isArray(json.reunions) ? json.reunions : [];
+      const data = Array.isArray(json?.reunions) ? json.reunions : [];
 
       const enriched = await Promise.all(
         data.map(async (reunion: any) => {
           const courses = await Promise.all(
-            (reunion.courses || []).map(async (course: any) => {
-              try {
-                const resCourse = await fetch(
-                  `${API_BASE}/api/course/${course.reunion}/${course.course}`
-                );
+            (Array.isArray(reunion?.courses) ? reunion.courses : []).map(
+              async (course: any) => {
+                try {
+                  const resCourse = await fetch(
+                    `${base}/api/course/${course.reunion}/${course.course}`,
+                    {
+                      method: "GET",
+                      headers: {
+                        Accept: "application/json",
+                      },
+                    }
+                  );
 
-                if (!resCourse.ok) {
-                  throw new Error(`HTTP ${resCourse.status}`);
+                  if (!resCourse.ok) {
+                    throw new Error(`HTTP ${resCourse.status}`);
+                  }
+
+                  const jsonCourse = await resCourse.json();
+                  const participants = Array.isArray(jsonCourse?.participants)
+                    ? jsonCourse.participants
+                    : [];
+
+                  const values = participants
+                    .map((p: any) => {
+                      const probIA = Number(p?.probabiliteIA || 0);
+                      const cotePMU = Number(p?.cotePMU || 0);
+
+                      if (!cotePMU || cotePMU <= 0) return null;
+
+                      const probPMU = 100 / cotePMU;
+                      const value = probIA - probPMU;
+
+                      return Number.isFinite(value) ? Math.round(value) : null;
+                    })
+                    .filter((v: number | null): v is number => v !== null);
+
+                  return {
+                    ...course,
+                    valueMax: values.length ? Math.max(...values) : 0,
+                  };
+                } catch {
+                  return {
+                    ...course,
+                    valueMax: 0,
+                  };
                 }
-
-                const jsonCourse = await resCourse.json();
-                const participants = Array.isArray(jsonCourse.participants)
-                  ? jsonCourse.participants
-                  : [];
-
-                const values = participants
-                  .map((p: any) => {
-                    const probIA = Number(p.probabiliteIA || 0);
-                    const cotePMU = Number(p.cotePMU || 0);
-
-                    if (!cotePMU || cotePMU <= 0) return null;
-
-                    const probPMU = 100 / cotePMU;
-                    const value = probIA - probPMU;
-
-                    return Number.isFinite(value) ? Math.round(value) : null;
-                  })
-                  .filter((v: number | null): v is number => v !== null);
-
-                return {
-                  ...course,
-                  valueMax: values.length ? Math.max(...values) : 0,
-                };
-              } catch {
-                return {
-                  ...course,
-                  valueMax: 0,
-                };
               }
-            })
+            )
           );
 
           return {
@@ -177,12 +193,13 @@ export default function ReunionsScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.courseHeader}>
                     <Text style={styles.courseTitle}>{course.titre}</Text>
+
                     {typeof course.valueMax === "number" &&
-                      course.valueMax >= 8 && (
-                        <Text style={styles.valueBadge}>
-                          🔥 VALUE +{course.valueMax}
-                        </Text>
-                      )}
+                    course.valueMax >= 8 ? (
+                      <Text style={styles.valueBadge}>
+                        🔥 VALUE +{course.valueMax}
+                      </Text>
+                    ) : null}
                   </View>
 
                   <Text style={styles.courseMeta}>
@@ -277,6 +294,7 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 15,
     fontWeight: "700",
+    flexShrink: 1,
   },
   courseMeta: {
     color: "#9fc0d8",
