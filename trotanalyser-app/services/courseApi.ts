@@ -1,23 +1,55 @@
-import type { CourseData } from "../types/course";
+import { API_BASE, assertApiBase } from "../constants/courseApiBase";
 
-export const getApiBase = () => {
-  const fromEnv = (process.env.EXPO_PUBLIC_API_BASE || "").replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-
-  if (typeof window !== "undefined") {
-    return window.location.origin.replace(/-\d+\.app\.github\.dev$/, "-8000.app.github.dev");
-  }
-
-  return "";
+export type Participant = {
+  numero: number;
+  nom: string;
+  musique?: string;
+  ferrure?: string;
+  driver?: string;
+  entraineur?: string;
+  corde?: string;
+  gains?: number;
+  age?: number;
+  sexe?: string;
+  cotePMU?: number;
+  probabiliteIA?: number;
+  scoreIA?: number;
+  confianceIA?: number;
+  value?: number;
+  badges?: string[];
+  analyseIA?: string;
+  retardGains?: number;
+  driverIndex?: number;
+  trainerIndex?: number;
+  rankIA?: number;
+  casaque?: string;
 };
 
-export async function fetchCourse(reunion: string, course: string): Promise<CourseData> {
-  const API_BASE = getApiBase();
-  const url = `${API_BASE}/api/course/${reunion}/${course}`;
+export type CourseData = {
+  reunion: string;
+  course: string;
+  hippodrome?: string;
+  nomCourse?: string;
+  heure?: string;
+  distance?: string | number;
+  piste?: string;
+  corde?: string;
+  allocation?: number;
+  meteo?: string;
+  participants: Participant[];
+};
 
-  const res = await fetch(url, {
+export async function fetchCourse(
+  reunion: string,
+  course: string,
+): Promise<CourseData> {
+  const base = assertApiBase();
+
+  const res = await fetch(`${base}/api/course/${reunion}/${course}`, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+    },
   });
 
   if (!res.ok) {
@@ -25,10 +57,13 @@ export async function fetchCourse(reunion: string, course: string): Promise<Cour
   }
 
   const json = await res.json();
+  const data = json?.data ?? json;
 
-  if (!json) {
+  if (!data) {
     throw new Error("Réponse vide");
   }
 
-  return json;
+  return data as CourseData;
 }
+
+export { API_BASE };
