@@ -1,6 +1,8 @@
 import Constants from "expo-constants";
 
-const getApiBase = () => {
+const PROD_API_BASE = process.env.EXPO_PUBLIC_API_BASE?.trim();
+
+const getDevApiBase = () => {
   const debuggerHost = Constants.expoConfig?.hostUri;
 
   if (debuggerHost) {
@@ -11,4 +13,4 @@ const getApiBase = () => {
   return "http://localhost:8000";
 };
 
-export const API_BASE = getApiBase();
+export const API_BASE = PROD_API_BASE || getDevApiBase();
