@@ -7,7 +7,7 @@ import CourseInsights from "../components/course/CourseInsights";
 import CourseHorseInlineCard from "../components/course/CourseHorseInlineCard";
 import { styles } from "../components/course/courseScreenStyles";
 import type { Participant, CourseData } from "../types/courseScreen";
-import { API_BASE } from "../constants/courseApiBase";
+import { assertApiBase } from "../constants/courseApiBase";
 import { useCourseAnalysis } from "../hooks/useCourseAnalysis";
 
 export default function CourseScreen() {
@@ -20,7 +20,7 @@ export default function CourseScreen() {
     typeof params.course === "string" ? params.course : undefined;
 
   const [data, setData] = useState<CourseData | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!reunion || !course) return;
@@ -29,16 +29,22 @@ export default function CourseScreen() {
 
     const loadCourse = async () => {
       try {
-        setError(false);
+        setError("");
 
-        const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`);
+        const base = assertApiBase();
+        const res = await fetch(`${base}/api/course/${reunion}/${course}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
 
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
 
         const json = await res.json();
-        const nextData = json?.data ?? json ?? null;
+        const nextData = (json?.data ?? json ?? null) as CourseData | null;
 
         if (isMounted) {
           setData(nextData);
@@ -46,7 +52,7 @@ export default function CourseScreen() {
       } catch (e) {
         console.error("Erreur chargement course:", e);
         if (isMounted) {
-          setError(true);
+          setError(e instanceof Error ? e.message : "Erreur inconnue");
         }
       }
     };
@@ -58,12 +64,7 @@ export default function CourseScreen() {
     };
   }, [reunion, course]);
 
-  const {
-    sortedParticipants = [],
-    top3IA,
-    valueBets,
-    topValue,
-  } = useCourseAnalysis(data);
+  const { sortedParticipants = [] } = useCourseAnalysis(data);
 
   const shortFerrure = (f?: string) => {
     if (!f || f === "NR") return "NR";
@@ -218,7 +219,10 @@ export default function CourseScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Impossible de charger la course</Text>
+        <Text style={styles.errorText}>
+          Impossible de charger la course{"\n"}
+          <Text style={styles.infoText}>{error}</Text>
+        </Text>
       </View>
     );
   }
@@ -241,7 +245,6 @@ export default function CourseScreen() {
       </View>
 
       <CourseHeader data={data} styles={styles} />
-
       <CourseInsights participants={sortedParticipants} styles={styles} />
 
       {sortedParticipants.map((c: Participant) => (
@@ -341,7 +344,6 @@ export default function CourseScreen() {
               </Text>
 
               <Text style={styles.lineCompact}>{c.musique || "-"}</Text>
-
               <Text style={styles.analysis}>{shortAnalyse(c.analyseIA)}</Text>
             </View>
 
@@ -398,4 +400,4 @@ export default function CourseScreen() {
       ))}
     </ScrollView>
   );
-  }
+      }
