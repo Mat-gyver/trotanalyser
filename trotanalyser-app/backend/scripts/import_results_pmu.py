@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-# permet d'importer les modules du dossier backend
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
@@ -38,7 +37,6 @@ def import_one_day(day_str):
             course_code = f"C{course_data.get('numOrdre')}"
             distance = course_data.get("distance")
 
-            # tentative de récupération des résultats
             try:
                 result_data = pmu(f"{day_str}/{reunion_code}/{course_code}/arrivee-definitive")
             except Exception:
@@ -79,16 +77,27 @@ def import_one_day(day_str):
     return inserted
 
 
-def main():
+def import_last_days(days=7):
     init_db()
 
     total = 0
-    for day_str in iter_last_days(365):
+    details = []
+
+    for day_str in iter_last_days(days):
         count = import_one_day(day_str)
         total += count
-        print(f"{day_str}: {count} lignes importées")
+        details.append({"date": day_str, "inserted": count})
 
-    print(f"\nImport terminé : {total} lignes")
+    return {
+        "days": days,
+        "totalInserted": total,
+        "details": details,
+    }
+
+
+def main():
+    result = import_last_days(365)
+    print(result)
 
 
 if __name__ == "__main__":
