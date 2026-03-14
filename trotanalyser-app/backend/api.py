@@ -568,6 +568,59 @@ def build_analyse_ia(
 
 
 # --------------------------------------------------
+# SYNTHESE COURSE
+# --------------------------------------------------
+
+
+def build_course_synthesis(chevaux):
+    top_performance = sorted(
+        chevaux,
+        key=lambda x: (
+            x.get("rankIA", 999),
+            -x.get("scoreIA", 0),
+            -x.get("confianceIA", 0),
+        ),
+    )[:3]
+
+    top_value = sorted(
+        chevaux,
+        key=lambda x: x.get("value", 0),
+        reverse=True,
+    )[:3]
+
+    faux_favoris = [
+        cheval for cheval in chevaux
+        if "FAVORI SURCOTÉ" in (cheval.get("badges") or [])
+    ]
+
+    outsiders_value = [
+        cheval for cheval in chevaux
+        if "OUTSIDER INTÉRESSANT" in (cheval.get("badges") or [])
+    ]
+
+    def short_item(cheval):
+        return {
+            "numero": cheval.get("numero"),
+            "nom": cheval.get("nom"),
+            "rankIA": cheval.get("rankIA"),
+            "scoreIA": cheval.get("scoreIA"),
+            "probabiliteIA": cheval.get("probabiliteIA"),
+            "probabilitePMU": cheval.get("probabilitePMU"),
+            "cotePMU": cheval.get("cotePMU"),
+            "value": cheval.get("value"),
+            "indicePari": cheval.get("indicePari"),
+            "badges": cheval.get("badges", []),
+        }
+
+    return {
+        "topPerformance": [short_item(c) for c in top_performance],
+        "topValue": [short_item(c) for c in top_value],
+        "fauxFavoris": [short_item(c) for c in faux_favoris],
+        "outsidersValue": [short_item(c) for c in outsiders_value],
+    }
+
+
+# --------------------------------------------------
 # ROUTES API
 # --------------------------------------------------
 
