@@ -1,4 +1,5 @@
 from datetime import datetime
+
 import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,32 +24,35 @@ def today():
 def pmu(path):
     url = f"{PMU_BASE}/{path}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers, timeout=15)
-    r.raise_for_status()
+    response = requests.get(url, headers=headers, timeout=15)
+    response.raise_for_status()
+
     try:
-        return r.json()
+        return response.json()
     except Exception:
         raise ValueError(f"Réponse PMU non JSON pour {url}")
 
 
-def score(m):
-    if not m:
+def score(musique):
+    if not musique:
         return 0
-    s = 0
-    for c in m[:8]:
-        if c == "1":
-            s += 10
-        elif c == "2":
-            s += 8
-        elif c == "3":
-            s += 6
-        elif c == "4":
-            s += 4
-        elif c == "5":
-            s += 2
-        elif c.lower() == "d":
-            s -= 5
-    return max(0, s)
+
+    total = 0
+    for char in str(musique)[:8]:
+        if char == "1":
+            total += 10
+        elif char == "2":
+            total += 8
+        elif char == "3":
+            total += 6
+        elif char == "4":
+            total += 4
+        elif char == "5":
+            total += 2
+        elif char.lower() == "d":
+            total -= 5
+
+    return max(0, total)
 
 
 def analyse_forme(musique):
@@ -96,7 +100,7 @@ def analyse_driver(driver):
         "PLOQUIN",
     ]
 
-    d = driver.upper()
+    d = str(driver).upper()
 
     if any(nom in d for nom in top_drivers):
         return "driver de tout premier plan dans cette catégorie"
@@ -117,7 +121,7 @@ def analyse_entraineur(entraineur):
         "HENRY",
     ]
 
-    e = entraineur.upper()
+    e = str(entraineur).upper()
 
     if any(nom in e for nom in top_trainers):
         return "entraînement redoutable sur ce type d'épreuve"
@@ -130,7 +134,7 @@ def analyse_piste_meteo(distance=None, hippodrome=None):
     except Exception:
         d = 0
 
-    h = (hippodrome or "").upper()
+    h = str(hippodrome or "").upper()
     notes = []
 
     if d >= 2850:
@@ -171,9 +175,21 @@ def confiance_from_score(score_ia):
 def driver_index(driver):
     if not driver:
         return 0
-    d = driver.upper()
-    elite = ["RAFFIN", "ABRIVARD", "BAZIRE", "THOMAIN", "NIVARD", "GOOP", "ROCHARD", "LAGADEUC", "PLOQUIN"]
+
+    d = str(driver).upper()
+    elite = [
+        "RAFFIN",
+        "ABRIVARD",
+        "BAZIRE",
+        "THOMAIN",
+        "NIVARD",
+        "GOOP",
+        "ROCHARD",
+        "LAGADEUC",
+        "PLOQUIN",
+    ]
     solide = ["MOTTIER", "DUBOIS", "COLLETTE", "LEBOURGEOIS", "MARTENS", "JAMARD", "DERIEUX"]
+
     if any(x in d for x in elite):
         return 8
     if any(x in d for x in solide):
@@ -184,9 +200,11 @@ def driver_index(driver):
 def trainer_index(entraineur):
     if not entraineur:
         return 0
-    e = entraineur.upper()
+
+    e = str(entraineur).upper()
     elite = ["BAZIRE", "ABRIVARD", "MARMION", "DUVALDESTIN", "ALLAIRE", "THOMAIN", "HENRY", "ROUBAUD"]
     solide = ["DERIEUX", "LE VEXIER", "ALEXANDRE", "GUELPA", "GRIFT"]
+
     if any(x in e for x in elite):
         return 8
     if any(x in e for x in solide):
@@ -257,6 +275,7 @@ def fragile_favori(cote_pmu, score_ia, confiance_ia):
         c = float(cote_pmu)
     except Exception:
         c = 999.0
+
     return c <= 5 and score_ia <= 12 and confiance_ia <= 60
 
 
@@ -265,6 +284,7 @@ def tocard_ia(cote_pmu, score_ia, value, retard_gains):
         c = float(cote_pmu)
     except Exception:
         c = 0.0
+
     return c >= 15 and score_ia >= 10 and (value > 1 or retard_gains >= 5)
 
 
@@ -273,16 +293,22 @@ def outsider_interessant(cote_pmu, score_ia, value, confiance_ia):
         c = float(cote_pmu)
     except Exception:
         c = 0.0
+
     return c >= 8 and score_ia >= 12 and value > 0 and confiance_ia >= 48
 
 
 def badges_turf(cheval):
     badges = []
+
     if cheval.get("rankIA") == 1:
         badges.append("TOP IA")
     if cheval.get("value", 0) > 0.4:
         badges.append("VALUE BET")
-    if fragile_favori(cheval.get("cotePMU"), cheval.get("scoreIA", 0), cheval.get("confianceIA", 0)):
+    if fragile_favori(
+        cheval.get("cotePMU"),
+        cheval.get("scoreIA", 0),
+        cheval.get("confianceIA", 0),
+    ):
         badges.append("FAVORI FRAGILE")
     if tocard_ia(
         cheval.get("cotePMU"),
@@ -298,6 +324,7 @@ def badges_turf(cheval):
         cheval.get("confianceIA", 0),
     ):
         badges.append("OUTSIDER INTÉRESSANT")
+
     return badges
 
 
@@ -388,7 +415,6 @@ def programme():
 @app.get("/api/course/{reunion}/{course}")
 def course(reunion: str, course: str):
     d = today()
-
     r = reunion.replace("R", "")
     c = course.replace("C", "")
 
@@ -409,7 +435,10 @@ def course(reunion: str, course: str):
                 "nom": participant.get("nom"),
                 "driver": participant.get("driver"),
                 "entraineur": participant.get("entraineur"),
-                "ferrure": participant.get("ferrure") or participant.get("deferre") or participant.get("chaussure") or "NR",
+                "ferrure": participant.get("ferrure")
+                or participant.get("deferre")
+                or participant.get("chaussure")
+                or "NR",
                 "musique": musique,
                 "corde": participant.get("placeCorde"),
                 "age": participant.get("age"),
@@ -473,7 +502,11 @@ def course(reunion: str, course: str):
 
     chevaux = sorted(
         chevaux,
-        key=lambda x: (x.get("scoreIA", 0), x.get("confianceIA", 0), x.get("value", 0)),
+        key=lambda x: (
+            x.get("scoreIA", 0),
+            x.get("confianceIA", 0),
+            x.get("value", 0),
+        ),
         reverse=True,
     )
 
@@ -483,8 +516,19 @@ def course(reunion: str, course: str):
     for cheval in chevaux:
         cheval["badges"] = badges_turf(cheval)
 
+    hippodrome = data.get("hippodrome") or {}
+    hippodrome_label = (
+        hippodrome.get("libelleCourt")
+        if isinstance(hippodrome, dict)
+        else str(hippodrome or "")
+    )
+
     return {
         "reunion": reunion,
         "course": course,
+        "hippodrome": hippodrome_label,
+        "distance": data.get("distance"),
+        "partants": len(chevaux),
         "participants": chevaux,
+    }
     }
