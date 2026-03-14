@@ -826,4 +826,3 @@ def course(reunion: str, course: str):
     ),
     "participants": chevaux,
     }
-    }
