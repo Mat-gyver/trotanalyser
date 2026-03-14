@@ -31,4 +31,4 @@ def date_str(dt):
 def iter_last_days(days=365):
     today_dt = datetime.now()
     for i in range(days):
-        yield date_str(today_dt - timedelta(days=i)){})
+        yield date_str(today_dt - timedelta(days=i))
