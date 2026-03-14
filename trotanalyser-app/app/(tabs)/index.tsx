@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { assertApiBase } from "../../constants/courseApiBase";
+import { API_BASE } from "../../constants/courseApiBase";
 
 type Course = {
   reunion: string;
@@ -41,9 +41,15 @@ export default function ReunionsScreen() {
     try {
       setError("");
 
-      const base = assertApiBase();
+      const base = API_BASE;
 
+      if (!base) {
+        throw new Error("API_BASE manquant");
+      }
+
+      // lecture cache
       const cache = await AsyncStorage.getItem("reunions_cache");
+
       if (cache) {
         try {
           const parsed = JSON.parse(cache);
@@ -56,7 +62,6 @@ export default function ReunionsScreen() {
       }
 
       const res = await fetch(`${base}/api/programme/today`, {
-        method: "GET",
         headers: {
           Accept: "application/json",
         },
@@ -67,10 +72,10 @@ export default function ReunionsScreen() {
       }
 
       const json = await res.json();
-      const data = Array.isArray(json?.reunions) ? json.reunions : [];
+      const reunionsData = Array.isArray(json?.reunions) ? json.reunions : [];
 
       const enriched = await Promise.all(
-        data.map(async (reunion: any) => {
+        reunionsData.map(async (reunion: any) => {
           const courses = await Promise.all(
             (Array.isArray(reunion?.courses) ? reunion.courses : []).map(
               async (course: any) => {
@@ -78,10 +83,7 @@ export default function ReunionsScreen() {
                   const resCourse = await fetch(
                     `${base}/api/course/${course.reunion}/${course.course}`,
                     {
-                      method: "GET",
-                      headers: {
-                        Accept: "application/json",
-                      },
+                      headers: { Accept: "application/json" },
                     }
                   );
 
@@ -130,7 +132,11 @@ export default function ReunionsScreen() {
       );
 
       setReunions(enriched);
-      await AsyncStorage.setItem("reunions_cache", JSON.stringify(enriched));
+
+      await AsyncStorage.setItem(
+        "reunions_cache",
+        JSON.stringify(enriched)
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
