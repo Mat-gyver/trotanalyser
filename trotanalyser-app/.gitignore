@@ -1,10 +1,9 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
@@ -30,15 +29,23 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env
+.env
 .env*.local
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-app-example
+# Python
+__pycache__/
+*.pyc
 
 # generated native folders
 /ios
 /android
+
+# backend database
 backend/trotanalyser.db
+
+# example app
+app-example
