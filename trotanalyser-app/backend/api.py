@@ -565,4 +565,3 @@ def course(reunion: str, course: str):
         "partants": len(chevaux),
         "participants": chevaux,
     }
-    }
