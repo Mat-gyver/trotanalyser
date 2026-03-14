@@ -35,13 +35,13 @@ def pmu(path):
 
     try:
         return response.json()
-    except Exception:
-        raise ValueError(f"Réponse PMU non JSON pour {url}")
+    except Exception as exc:
+        raise ValueError(f"Réponse PMU non JSON pour {url}") from exc
 
 
 def safe_float(value, default=0.0):
     try:
-        if value is None:
+        if value is None or value == "":
             return default
         return float(str(value).replace(" ", "").replace(",", "."))
     except Exception:
@@ -50,9 +50,9 @@ def safe_float(value, default=0.0):
 
 def safe_int(value, default=0):
     try:
-        if value is None:
+        if value is None or value == "":
             return default
-        return int(value)
+        return int(float(value))
     except Exception:
         return default
 
@@ -61,58 +61,101 @@ def upper_text(value):
     return str(value or "").upper().strip()
 
 
+def get_programme_today():
+    data = pmu(today())
+    return data.get("programme", {})
+
+
+def extract_hippodrome_label(value):
+    if isinstance(value, dict):
+        return (
+            value.get("libelleCourt")
+            or value.get("libelleLong")
+            or value.get("libelle")
+            or ""
+        )
+    return str(value or "").strip()
+
+
+def find_reunion_and_course(programme_data, reunion, course):
+    reunion_target = reunion.replace("R", "")
+    course_target = course.replace("C", "")
+
+    for reunion_data in programme_data.get("reunions", []):
+        if str(reunion_data.get("numOfficiel")) != str(reunion_target):
+            continue
+
+        for course_data in reunion_data.get("courses", []):
+            if str(course_data.get("numOrdre")) == str(course_target):
+                return reunion_data, course_data
+
+        return reunion_data, None
+
+    return None, None
+
+
 # --------------------------------------------------
 # EXTRACTION CONTEXTE COURSE
 # --------------------------------------------------
 
 
-def extract_hippodrome_label(data):
-    hippodrome = data.get("hippodrome") or {}
+def extract_course_context(participants_data, reunion_data=None, course_data=None):
+    reunion_data = reunion_data or {}
+    course_data = course_data or {}
 
-    if isinstance(hippodrome, dict):
-        return (
-            hippodrome.get("libelleCourt")
-            or hippodrome.get("libelleLong")
-            or hippodrome.get("libelle")
-            or ""
-        )
+    hippodrome_label = (
+        extract_hippodrome_label(reunion_data.get("hippodrome"))
+        or extract_hippodrome_label(course_data.get("hippodrome"))
+        or extract_hippodrome_label(participants_data.get("hippodrome"))
+    )
 
-    return str(hippodrome or "")
-
-
-def extract_course_context(data):
-    hippodrome_label = extract_hippodrome_label(data)
+    distance = (
+        course_data.get("distance")
+        or participants_data.get("distance")
+        or participants_data.get("distanceCourse")
+        or participants_data.get("distanceMetres")
+        or None
+    )
 
     meteo = (
-        data.get("meteo")
-        or data.get("meteoLibelle")
-        or data.get("weather")
+        course_data.get("meteo")
+        or reunion_data.get("meteo")
+        or participants_data.get("meteo")
+        or participants_data.get("meteoLibelle")
+        or participants_data.get("weather")
         or None
     )
 
     temperature = (
-        data.get("temperature")
-        or data.get("temperatureC")
-        or data.get("temp")
+        course_data.get("temperature")
+        or reunion_data.get("temperature")
+        or participants_data.get("temperature")
+        or participants_data.get("temperatureC")
+        or participants_data.get("temp")
         or None
     )
 
     vent = (
-        data.get("vent")
-        or data.get("ventKmH")
-        or data.get("wind")
+        course_data.get("vent")
+        or reunion_data.get("vent")
+        or participants_data.get("vent")
+        or participants_data.get("ventKmH")
+        or participants_data.get("wind")
         or None
     )
 
     souplesse = (
-        data.get("souplesse")
-        or data.get("etatPiste")
-        or data.get("going")
+        course_data.get("souplesse")
+        or reunion_data.get("souplesse")
+        or participants_data.get("souplesse")
+        or participants_data.get("etatPiste")
+        or participants_data.get("going")
         or None
     )
 
     return {
         "hippodrome": hippodrome_label,
+        "distance": distance,
         "meteo": meteo,
         "temperature": temperature,
         "vent": vent,
@@ -134,7 +177,7 @@ def niveau_course_index(hippodrome=None, distance=None, partants=None):
 
     if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES"]):
         note += 4
-    elif any(x in h for x in ["CABOURG", "GRAIGNES", "LAVAL", "CAEN"]):
+    elif any(x in h for x in ["CABOURG", "GRAIGNES", "LAVAL", "CAEN", "AUTEUIL"]):
         note += 2
     else:
         note += 1
@@ -207,11 +250,6 @@ def regularite_index(musique):
 
 
 def course_level_adjustment(niveau_course, base_score):
-    """
-    Corrige légèrement la musique selon le niveau du lot.
-    Lot relevé + bonne musique = bonus.
-    Lot faible + musique flatteuse = légère décote.
-    """
     niveau = safe_int(niveau_course, 0)
     base = safe_int(base_score, 0)
 
@@ -247,11 +285,6 @@ def extract_vent_strength(vent):
 
 
 def meteo_fit_index(ferrure=None, distance=None, vent=None, souplesse=None):
-    """
-    Petit ajustement prudent.
-    On ne veut pas inventer une science exacte, seulement intégrer
-    le contexte météo/piste dans l’analyse cheval.
-    """
     score = 0
 
     f = upper_text(ferrure)
@@ -259,18 +292,15 @@ def meteo_fit_index(ferrure=None, distance=None, vent=None, souplesse=None):
     v = extract_vent_strength(vent)
     s = upper_text(souplesse)
 
-    # Longue distance + vent fort = contexte plus exigeant
     if d >= 2700 and v >= 20:
         score -= 1
 
-    # Souplesse / piste plus profonde
     if any(x in s for x in ["SOUPLE", "LOURD", "COLLANT", "HEAVY"]):
         if f in ["D4", "DP"]:
             score += 1
         elif f == "NR":
             score -= 1
 
-    # Piste rapide / bon terrain
     if any(x in s for x in ["BON", "RAPIDE", "GOOD", "FAST"]):
         if f in ["DA", "D4", "DP"]:
             score += 1
@@ -400,11 +430,6 @@ def retard_gains_index(age, gains, score_ia):
 
 
 def market_bias_index(cote_pmu, probabilite_ia, probabilite_pmu):
-    """
-    Corrige le biais marché PMU.
-    Négatif : favori trop joué.
-    Positif : outsider potentiellement sous-coté.
-    """
     cote = safe_float(cote_pmu, 0.0)
     pia = safe_float(probabilite_ia, 0.0)
     ppmu = safe_float(probabilite_pmu, 0.0)
@@ -422,6 +447,69 @@ def market_bias_index(cote_pmu, probabilite_ia, probabilite_pmu):
         return 2
 
     return 0
+
+
+# --------------------------------------------------
+# INDICE FORME TROT
+# --------------------------------------------------
+
+
+def score_forme_trot(musique):
+    if not musique:
+        return 0
+
+    score = 0
+    txt = str(musique)[:10]
+
+    for ch in txt:
+        if ch == "1":
+            score += 5
+        elif ch == "2":
+            score += 4
+        elif ch == "3":
+            score += 3
+        elif ch == "4":
+            score += 2
+        elif ch == "5":
+            score += 1
+        elif ch.lower() == "d":
+            score -= 2
+
+    return max(0, min(score, 20))
+
+
+def score_ferrure_trot(ferrure):
+    f = upper_text(ferrure)
+
+    if f in ["D4", "DP"]:
+        return 5
+    if f in ["DA", "PA"]:
+        return 3
+    if f == "NR":
+        return 1
+    return 2
+
+
+def score_distance_trot(distance):
+    d = safe_int(distance, 0)
+
+    if d >= 2850:
+        return 5
+    if d >= 2100:
+        return 4
+    if d > 0:
+        return 3
+    return 1
+
+
+def indice_forme_trot(cheval, distance=None):
+    note = (
+        score_forme_trot(cheval.get("musique"))
+        + score_ferrure_trot(cheval.get("ferrure"))
+        + score_distance_trot(distance)
+        + cheval.get("regulariteIndex", 0)
+    )
+    return round(note, 2)
 
 
 # --------------------------------------------------
@@ -516,7 +604,7 @@ def analyse_piste_meteo(distance=None, hippodrome=None, meteo=None, vent=None, s
     else:
         notes.append("distance à confirmer")
 
-    if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES", "CABOURG", "GRAIGNES"]):
+    if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES", "CABOURG", "GRAIGNES", "AUTEUIL"]):
         notes.append(f"repères hippodrome à surveiller sur {hippodrome}")
     else:
         notes.append("repères hippodrome encore limités")
@@ -655,10 +743,12 @@ def indice_pari(cheval):
     value = cheval.get("value", 0)
     confiance = cheval.get("confianceIA", 0)
     market_bias = cheval.get("marketBiasIndex", 0)
+    indice_forme = cheval.get("indiceFormeTrot", 0)
 
     note = (
-        score_ia * 0.28
-        + regularite * 0.18
+        score_ia * 0.24
+        + indice_forme * 0.80
+        + regularite * 0.16
         + driver * 0.10
         + trainer * 0.10
         + retard * 0.10
@@ -694,6 +784,7 @@ def build_analyse_ia(
     niveau_course=None,
     market_bias=None,
     meteo_fit=None,
+    indice_forme_trot=None,
 ):
     tendances = []
 
@@ -701,6 +792,14 @@ def build_analyse_ia(
     tendances.append(analyse_driver(driver).capitalize())
     tendances.append(analyse_entraineur(entraineur).capitalize())
     tendances.append(analyse_ferrure(ferrure).capitalize())
+
+    if indice_forme_trot is not None:
+        if indice_forme_trot >= 20:
+            tendances.append("Indice forme trot particulièrement favorable")
+        elif indice_forme_trot >= 14:
+            tendances.append("Indice forme trot intéressant")
+        elif indice_forme_trot <= 7:
+            tendances.append("Indice forme trot assez limité")
 
     if probabilite_ia >= 20:
         tendances.append("Profil prioritaire pour les toutes premières places")
@@ -809,20 +908,17 @@ def health():
 
 @app.get("/api/programme/today")
 def programme():
-    d = today()
-
     try:
-        data = pmu(d)
+        programme_data = get_programme_today()
     except Exception as e:
         return {"error": "pmu_fetch_failed", "detail": str(e)}
 
-    programme_data = data.get("programme", {})
     reunions_data = programme_data.get("reunions", [])
-
     reunions = []
 
     for reunion_data in reunions_data:
         courses = []
+        hippodrome = extract_hippodrome_label(reunion_data.get("hippodrome"))
 
         for course_data in reunion_data.get("courses", []):
             courses.append(
@@ -836,17 +932,15 @@ def programme():
                 }
             )
 
-        hippodrome = reunion_data.get("hippodrome") or {}
-
         reunions.append(
             {
                 "reunion": f"R{reunion_data.get('numOfficiel')}",
-                "hippodrome": hippodrome.get("libelleCourt", ""),
+                "hippodrome": hippodrome,
                 "courses": courses,
             }
         )
 
-    return {"date": d, "reunions": reunions}
+    return {"date": today(), "reunions": reunions}
 
 
 @app.get("/api/course/{reunion}/{course}")
@@ -856,15 +950,29 @@ def course(reunion: str, course: str):
     c = course.replace("C", "")
 
     try:
-        data = pmu(f"{d}/R{r}/C{c}/participants")
+        participants_data = pmu(f"{d}/R{r}/C{c}/participants")
     except Exception as e:
         return {"error": "pmu_fetch_failed", "detail": str(e)}
 
-    context = extract_course_context(data)
-    participants = data.get("participants", [])
+    try:
+        programme_data = get_programme_today()
+        reunion_data, course_data = find_reunion_and_course(programme_data, reunion, course)
+    except Exception:
+        reunion_data, course_data = None, None
+
+    reunion_data = reunion_data or {}
+    course_data = course_data or {}
+
+    context = extract_course_context(
+        participants_data=participants_data,
+        reunion_data=reunion_data,
+        course_data=course_data,
+    )
+
+    participants = participants_data.get("participants", [])
     niveau_course = niveau_course_index(
         hippodrome=context["hippodrome"],
-        distance=data.get("distance"),
+        distance=context["distance"],
         partants=len(participants),
     )
 
@@ -883,35 +991,45 @@ def course(reunion: str, course: str):
             musique=musique,
             niveau_course=niveau_course,
             ferrure=ferrure,
-            distance=data.get("distance"),
+            distance=context["distance"],
             vent=context["vent"],
             souplesse=context["souplesse"],
         )
 
-        chevaux.append(
-            {
-                "numero": participant.get("numPmu"),
-                "nom": participant.get("nom"),
-                "driver": participant.get("driver"),
-                "entraineur": participant.get("entraineur"),
-                "ferrure": ferrure,
-                "musique": musique,
-                "corde": participant.get("placeCorde"),
-                "age": participant.get("age"),
-                "gains": participant.get("gains"),
-                "sexe": participant.get("sexe"),
-                "baseScoreIA": score_bundle["baseScoreIA"],
-                "courseLevelAdj": score_bundle["courseLevelAdj"],
-                "meteoFitIndex": score_bundle["meteoFitIndex"],
-                "scoreIA": score_bundle["scoreIA"],
-                "cotePMU": (
-                    (participant.get("dernierRapportDirect") or {}).get("rapport")
-                    if isinstance(participant.get("dernierRapportDirect"), dict)
-                    else participant.get("dernierRapportDirect")
-                ),
-                "analyseIA": "",
-            }
+        cote_pmu = (
+            (participant.get("dernierRapportDirect") or {}).get("rapport")
+            if isinstance(participant.get("dernierRapportDirect"), dict)
+            else participant.get("dernierRapportDirect")
         )
+
+        cheval = {
+            "numero": participant.get("numPmu"),
+            "nom": participant.get("nom"),
+            "driver": participant.get("driver"),
+            "entraineur": participant.get("entraineur"),
+            "ferrure": ferrure,
+            "musique": musique,
+            "corde": participant.get("placeCorde"),
+            "age": participant.get("age"),
+            "gains": participant.get("gains"),
+            "sexe": participant.get("sexe"),
+            "baseScoreIA": score_bundle["baseScoreIA"],
+            "courseLevelAdj": score_bundle["courseLevelAdj"],
+            "meteoFitIndex": score_bundle["meteoFitIndex"],
+            "scoreIA": score_bundle["scoreIA"],
+            "cotePMU": cote_pmu,
+            "analyseIA": "",
+        }
+
+        cheval["regulariteIndex"] = regularite_index(cheval.get("musique"))
+        cheval["indiceFormeTrot"] = indice_forme_trot(cheval, context["distance"])
+
+        cheval["scoreIA"] = round(
+            cheval["scoreIA"] * 0.75 + cheval["indiceFormeTrot"] * 0.8,
+            2,
+        )
+
+        chevaux.append(cheval)
 
     total_score = sum(cheval.get("scoreIA", 0) for cheval in chevaux)
 
@@ -944,7 +1062,6 @@ def course(reunion: str, course: str):
         cheval["driverIndex"] = driver_index(cheval.get("driver"))
         cheval["trainerIndex"] = trainer_index(cheval.get("entraineur"))
         cheval["retardGains"] = retard_gains
-        cheval["regulariteIndex"] = regularite_index(cheval.get("musique"))
         cheval["marketBiasIndex"] = market_bias
         cheval["dataTurfPro"] = build_data_turf_pro(
             cheval.get("driver"),
@@ -961,7 +1078,7 @@ def course(reunion: str, course: str):
             cheval.get("scoreIA", 0),
             prob,
             value,
-            distance=data.get("distance"),
+            distance=context["distance"],
             hippodrome=context["hippodrome"],
             meteo=context["meteo"],
             vent=context["vent"],
@@ -969,6 +1086,7 @@ def course(reunion: str, course: str):
             niveau_course=niveau_course,
             market_bias=market_bias,
             meteo_fit=cheval.get("meteoFitIndex"),
+            indice_forme_trot=cheval.get("indiceFormeTrot"),
         )
 
     chevaux = sorted(
@@ -991,12 +1109,14 @@ def course(reunion: str, course: str):
     return {
         "reunion": reunion,
         "course": course,
-        "hippodrome": reunion_data.get("hippodrome", ""),
-        "distance": course_data.get("distance"),
-        "partants": course_data.get("partants", len(participants)),
-        "meteo": course_data.get("meteo"),
-        "temperature": course_data.get("temperature"),
-        "vent": course_data.get("vent"),
-        "souplesse": course_data.get("souplesse"),
-        "participants": participants,
-    }
+        "hippodrome": context["hippodrome"],
+        "distance": context["distance"],
+        "partants": len(chevaux),
+        "meteo": context["meteo"],
+        "temperature": context["temperature"],
+        "vent": context["vent"],
+        "souplesse": context["souplesse"],
+        "niveauCourse": niveau_course,
+        "participants": chevaux,
+        "synthesis": build_course_synthesis(chevaux),
+        }
