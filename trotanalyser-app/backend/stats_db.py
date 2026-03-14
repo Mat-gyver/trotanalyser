@@ -36,21 +36,21 @@ def init_db():
 
     cur.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_race_results_date
+        CREATE INDEX IF NOT EXISTS idx_race_date
         ON race_results (race_date)
         """
     )
 
     cur.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_race_results_driver
+        CREATE INDEX IF NOT EXISTS idx_driver
         ON race_results (driver)
         """
     )
 
     cur.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_race_results_entraineur
+        CREATE INDEX IF NOT EXISTS idx_entraineur
         ON race_results (entraineur)
         """
     )
@@ -78,8 +78,17 @@ def insert_race_result(
     cur.execute(
         """
         INSERT INTO race_results (
-            race_date, reunion, course, hippodrome, distance,
-            cheval, numero, driver, entraineur, position, allocation
+            race_date,
+            reunion,
+            course,
+            hippodrome,
+            distance,
+            cheval,
+            numero,
+            driver,
+            entraineur,
+            position,
+            allocation
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
@@ -118,4 +127,5 @@ def get_results_since(start_date):
 
     rows = [dict(row) for row in cur.fetchall()]
     conn.close()
+
     return rows
