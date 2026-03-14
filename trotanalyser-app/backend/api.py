@@ -269,6 +269,33 @@ def retard_gains_index(age, gains, score_ia):
     return 0
 
 
+def niveau_course_index(hippodrome=None, distance=None, partants=None):
+    note = 0
+
+    h = str(hippodrome or "").upper()
+    d = safe_int(distance, 0)
+    p = safe_int(partants, 0)
+
+    if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES"]):
+        note += 4
+    elif any(x in h for x in ["CABOURG", "GRAIGNES", "LAVAL", "CAEN"]):
+        note += 2
+    else:
+        note += 1
+
+    if d >= 2850:
+        note += 2
+    elif d >= 2100:
+        note += 1
+
+    if p >= 16:
+        note += 2
+    elif p >= 12:
+        note += 1
+
+    return min(note, 10)
+
+
 # --------------------------------------------------
 # ANALYSES TEXTE
 # --------------------------------------------------
@@ -783,15 +810,14 @@ def course(reunion: str, course: str):
         cheval["indicePari"] = indice_pari(cheval)
 
     return {
-    "reunion": reunion,
-    "course": course,
-    "hippodrome": context["hippodrome"],
-    "distance": data.get("distance"),
-    "partants": len(chevaux),
-    "meteo": context["meteo"],
-    "temperature": context["temperature"],
-    "vent": context["vent"],
-    "souplesse": context["souplesse"],
-    "participants": chevaux,
-    "synthesis": build_course_synthesis(chevaux),
+        "reunion": reunion,
+        "course": course,
+        "hippodrome": context["hippodrome"],
+        "distance": data.get("distance"),
+        "partants": len(chevaux),
+        "meteo": context["meteo"],
+        "temperature": context["temperature"],
+        "vent": context["vent"],
+        "souplesse": context["souplesse"],
+        "participants": chevaux,
     }
