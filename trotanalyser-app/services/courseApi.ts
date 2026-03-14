@@ -1,4 +1,4 @@
-import { API_BASE, assertApiBase } from "../constants/courseApiBase";
+import { API_BASE } from "../constants/courseApiBase";
 
 export type Participant = {
   numero: number;
@@ -41,11 +41,13 @@ export type CourseData = {
 
 export async function fetchCourse(
   reunion: string,
-  course: string,
+  course: string
 ): Promise<CourseData> {
-  const base = assertApiBase();
+  if (!API_BASE) {
+    throw new Error("API_BASE manquant");
+  }
 
-  const res = await fetch(`${base}/api/course/${reunion}/${course}`, {
+  const res = await fetch(`${API_BASE}/api/course/${reunion}/${course}`, {
     method: "GET",
     headers: {
       Accept: "application/json",
