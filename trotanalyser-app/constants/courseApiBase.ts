@@ -1,1 +1,14 @@
-export const API_BASE = "https://zany-space-invention-5gwgq4vq6gg5fpv67-8000.app.github.dev";
+import Constants from "expo-constants";
+
+const getApiBase = () => {
+  const debuggerHost = Constants.expoConfig?.hostUri;
+
+  if (debuggerHost) {
+    const host = debuggerHost.split(":").shift();
+    return `http://${host}:8000`;
+  }
+
+  return "http://localhost:8000";
+};
+
+export const API_BASE = getApiBase();
