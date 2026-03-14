@@ -669,4 +669,4 @@ def course(reunion: str, course: str):
         "distance": data.get("distance"),
         "partants": len(chevaux),
         "participants": chevaux,
-    }
+}
