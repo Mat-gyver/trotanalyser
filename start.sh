@@ -22,6 +22,10 @@ if [ ! -f "$BACKEND_DIR/api.py" ]; then
   exit 1
 fi
 
+echo "🧹 Closing previous backend process if needed..."
+pkill -f "uvicorn api:app --host 0.0.0.0 --port 8000" || true
+pkill -f "python3 -m uvicorn api:app --host 0.0.0.0 --port 8000" || true
+
 echo "📦 Installing frontend dependencies if needed..."
 cd "$APP_DIR"
 npm install
