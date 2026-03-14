@@ -1,4 +1,33 @@
-
+# Python
 *.db
 __pycache__/
 *.pyc
+
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Metro bundler
+.metro-health-check*
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# TypeScript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# env
+.env
+.env*.local
+
+# native build folders
+/android
+/ios
