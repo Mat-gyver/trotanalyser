@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 
 PMU_BASE = "https://offline.turfinfo.api.pmu.fr/rest/client/7/programme"
