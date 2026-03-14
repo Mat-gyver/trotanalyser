@@ -22,9 +22,12 @@ if [ ! -f "$BACKEND_DIR/api.py" ]; then
   exit 1
 fi
 
-echo "🧹 Closing previous backend process if needed..."
+echo "🧹 Closing previous backend and Expo processes..."
 pkill -f "uvicorn api:app --host 0.0.0.0 --port 8000" || true
 pkill -f "python3 -m uvicorn api:app --host 0.0.0.0 --port 8000" || true
+pkill -f "expo start" || true
+pkill -f "node .*expo" || true
+pkill -f "metro" || true
 
 echo "📦 Installing frontend dependencies if needed..."
 cd "$APP_DIR"
@@ -40,6 +43,6 @@ python3 -m uvicorn api:app --host 0.0.0.0 --port 8000 > "$ROOT_DIR/backend.log" 
 echo "⏳ Waiting 3 seconds for backend startup..."
 sleep 3
 
-echo "📱 Starting Expo..."
+echo "📱 Starting Expo on fixed port 8081..."
 cd "$APP_DIR"
-npx expo start --tunnel
+npx expo start --tunnel --port 8081 --clear
