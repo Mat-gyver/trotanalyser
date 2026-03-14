@@ -8,8 +8,9 @@ export type Participant = {
   musique?: string
   analyseIA?: string
 
-  scoreIA?: number
+  scoreIA: number
   probabiliteIA?: number
+  probabilitePMU?: number
   confianceIA?: number
 
   cotePMU?: number
@@ -19,17 +20,16 @@ export type Participant = {
   driverIndex?: number
   trainerIndex?: number
   retardGains?: number
+  regulariteIndex?: number
 
   rankIA?: number
+  indicePari?: number
 
   badges?: string[]
 
   casaque?: string
 
-  // signaux calculés par l'IA
-  valueSignal?: number
-  favoriFragile?: boolean
-  grosTocard?: boolean
+  dataTurfPro?: string
 }
 
 export type CourseData = {
