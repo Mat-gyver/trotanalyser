@@ -39,6 +39,88 @@ def pmu(path):
         raise ValueError(f"Réponse PMU non JSON pour {url}")
 
 
+def safe_float(value, default=0.0):
+    try:
+        if value is None:
+            return default
+        return float(str(value).replace(" ", "").replace(",", "."))
+    except Exception:
+        return default
+
+
+def safe_int(value, default=0):
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+# --------------------------------------------------
+# EXTRACTION CONTEXTE COURSE
+# --------------------------------------------------
+
+
+def extract_hippodrome_label(data):
+    hippodrome = data.get("hippodrome") or {}
+
+    if isinstance(hippodrome, dict):
+        return (
+            hippodrome.get("libelleCourt")
+            or hippodrome.get("libelleLong")
+            or hippodrome.get("libelle")
+            or ""
+        )
+
+    return str(hippodrome or "")
+
+
+def extract_course_context(data):
+    """
+    Construit les champs de contexte côté backend.
+    On n'invente pas la météo : on la prend si elle est présente
+    dans la réponse source, sinon on renvoie None.
+    """
+    hippodrome_label = extract_hippodrome_label(data)
+
+    meteo = (
+        data.get("meteo")
+        or data.get("meteoLibelle")
+        or data.get("weather")
+        or None
+    )
+
+    temperature = (
+        data.get("temperature")
+        or data.get("temperatureC")
+        or data.get("temp")
+        or None
+    )
+
+    vent = (
+        data.get("vent")
+        or data.get("ventKmH")
+        or data.get("wind")
+        or None
+    )
+
+    souplesse = (
+        data.get("souplesse")
+        or data.get("etatPiste")
+        or data.get("going")
+        or None
+    )
+
+    return {
+        "hippodrome": hippodrome_label,
+        "meteo": meteo,
+        "temperature": temperature,
+        "vent": vent,
+        "souplesse": souplesse,
+    }
+
+
 # --------------------------------------------------
 # SCORES ET INDICES
 # --------------------------------------------------
@@ -169,15 +251,8 @@ def trainer_index(entraineur):
 
 
 def retard_gains_index(age, gains, score_ia):
-    try:
-        age_n = int(age)
-    except Exception:
-        age_n = 0
-
-    try:
-        g = float(str(gains).replace(" ", "").replace(",", "."))
-    except Exception:
-        g = 0.0
+    age_n = safe_int(age, 0)
+    g = safe_float(gains, 0.0)
 
     if age_n <= 0:
         return 0
@@ -272,12 +347,8 @@ def analyse_entraineur(entraineur):
     return "entraînement classique"
 
 
-def analyse_piste_meteo(distance=None, hippodrome=None):
-    try:
-        d = int(distance) if distance else 0
-    except Exception:
-        d = 0
-
+def analyse_piste_meteo(distance=None, hippodrome=None, meteo=None, vent=None, souplesse=None):
+    d = safe_int(distance, 0)
     h = str(hippodrome or "").upper()
     notes = []
 
@@ -294,6 +365,15 @@ def analyse_piste_meteo(distance=None, hippodrome=None):
         notes.append(f"repères hippodrome à surveiller sur {hippodrome}")
     else:
         notes.append("repères hippodrome encore limités")
+
+    if souplesse:
+        notes.append(f"état de piste indiqué : {souplesse}")
+
+    if meteo:
+        notes.append(f"météo signalée : {meteo}")
+
+    if vent:
+        notes.append(f"vent signalé : {vent}")
 
     return ". ".join(notes)
 
@@ -337,42 +417,25 @@ def build_data_turf_pro(driver, entraineur, age, gains, score_ia):
 
 
 def fragile_favori(cote_pmu, score_ia, confiance_ia):
-    try:
-        c = float(cote_pmu)
-    except Exception:
-        c = 999.0
-
+    c = safe_float(cote_pmu, 999.0)
     return c <= 5 and score_ia <= 12 and confiance_ia <= 60
 
 
 def tocard_ia(cote_pmu, score_ia, value, retard_gains):
-    try:
-        c = float(cote_pmu)
-    except Exception:
-        c = 0.0
-
+    c = safe_float(cote_pmu, 0.0)
     return c >= 15 and score_ia >= 10 and (value > 5 or retard_gains >= 5)
 
 
 def outsider_interessant(cote_pmu, score_ia, value, confiance_ia):
-    try:
-        c = float(cote_pmu)
-    except Exception:
-        c = 0.0
-
+    c = safe_float(cote_pmu, 0.0)
     return c >= 8 and score_ia >= 12 and value > 0 and confiance_ia >= 48
 
 
 def faux_favori_pmu(cheval):
-    cote = cheval.get("cotePMU") or 0
+    cote = safe_float(cheval.get("cotePMU"), 999.0)
     score_ia = cheval.get("scoreIA", 0)
     confiance = cheval.get("confianceIA", 0)
     regularite = cheval.get("regulariteIndex", 0)
-
-    try:
-        cote = float(cote)
-    except Exception:
-        cote = 999.0
 
     if cote <= 4 and score_ia < 15:
         return True
@@ -464,6 +527,9 @@ def build_analyse_ia(
     value,
     distance=None,
     hippodrome=None,
+    meteo=None,
+    vent=None,
+    souplesse=None,
 ):
     tendances = []
 
@@ -488,7 +554,15 @@ def build_analyse_ia(
     else:
         tendances.append("Pas de value évidente face au marché PMU")
 
-    tendances.append(analyse_piste_meteo(distance, hippodrome).capitalize())
+    tendances.append(
+        analyse_piste_meteo(
+            distance=distance,
+            hippodrome=hippodrome,
+            meteo=meteo,
+            vent=vent,
+            souplesse=souplesse,
+        ).capitalize()
+    )
 
     return ". ".join(tendances) + "."
 
@@ -556,6 +630,8 @@ def course(reunion: str, course: str):
     except Exception as e:
         return {"error": "pmu_fetch_failed", "detail": str(e)}
 
+    context = extract_course_context(data)
+
     participants = data.get("participants", [])
     chevaux = []
 
@@ -594,12 +670,7 @@ def course(reunion: str, course: str):
         prob = probabilite_from_score(cheval.get("scoreIA", 0), total_score)
         cote_ia = round(100 / prob, 2) if prob > 0 else 100.0
 
-        cote_pmu = cheval.get("cotePMU") or 0
-        try:
-            cote_pmu = float(cote_pmu)
-        except Exception:
-            cote_pmu = 0.0
-
+        cote_pmu = safe_float(cheval.get("cotePMU"), 0.0)
         probabilite_pmu = round(100 / cote_pmu, 2) if cote_pmu > 0 else 0.0
         value = round(prob - probabilite_pmu, 2)
 
@@ -634,8 +705,11 @@ def course(reunion: str, course: str):
             cheval.get("scoreIA", 0),
             prob,
             value,
-            data.get("distance"),
-            (data.get("hippodrome") or {}).get("libelleCourt", data.get("hippodrome")),
+            distance=data.get("distance"),
+            hippodrome=context["hippodrome"],
+            meteo=context["meteo"],
+            vent=context["vent"],
+            souplesse=context["souplesse"],
         )
 
     chevaux = sorted(
@@ -655,18 +729,15 @@ def course(reunion: str, course: str):
         cheval["badges"] = badges_turf(cheval)
         cheval["indicePari"] = indice_pari(cheval)
 
-    hippodrome = data.get("hippodrome") or {}
-    hippodrome_label = (
-        hippodrome.get("libelleCourt")
-        if isinstance(hippodrome, dict)
-        else str(hippodrome or "")
-    )
-
     return {
         "reunion": reunion,
         "course": course,
-        "hippodrome": hippodrome_label,
+        "hippodrome": context["hippodrome"],
         "distance": data.get("distance"),
         "partants": len(chevaux),
+        "meteo": context["meteo"],
+        "temperature": context["temperature"],
+        "vent": context["vent"],
+        "souplesse": context["souplesse"],
         "participants": chevaux,
-}
+    }
