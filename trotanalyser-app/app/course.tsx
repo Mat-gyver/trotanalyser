@@ -7,7 +7,7 @@ import CourseInsights from "../components/course/CourseInsights";
 import CourseHorseInlineCard from "../components/course/CourseHorseInlineCard";
 import { styles } from "../components/course/courseScreenStyles";
 import type { Participant, CourseData } from "../types/courseScreen";
-import { assertApiBase } from "../constants/courseApiBase";
+import { API_BASE } from "../constants/courseApiBase";
 import { useCourseAnalysis } from "../hooks/useCourseAnalysis";
 
 export default function CourseScreen() {
@@ -31,7 +31,12 @@ export default function CourseScreen() {
       try {
         setError("");
 
-        const base = assertApiBase();
+        const base = API_BASE;
+
+        if (!base) {
+          throw new Error("API_BASE manquant");
+        }
+
         const res = await fetch(`${base}/api/course/${reunion}/${course}`, {
           method: "GET",
           headers: {
@@ -400,4 +405,4 @@ export default function CourseScreen() {
       ))}
     </ScrollView>
   );
-      }
+       }
