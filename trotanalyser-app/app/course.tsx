@@ -419,4 +419,4 @@ export default function CourseScreen() {
       ))}
     </ScrollView>
   );
-                }
+}
