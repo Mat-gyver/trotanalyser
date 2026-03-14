@@ -20,4 +20,15 @@ def pmu(path):
 
 def get_programme_today():
     data = pmu(today())
-    return data.get("programme", {})
+    return data.get("programme",
+                    
+from datetime import datetime, timedelta
+
+def date_str(dt):
+    return dt.strftime("%d%m%Y")
+
+
+def iter_last_days(days=365):
+    today_dt = datetime.now()
+    for i in range(days):
+        yield date_str(today_dt - timedelta(days=i)){})
