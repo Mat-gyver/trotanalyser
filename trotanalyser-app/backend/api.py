@@ -57,6 +57,10 @@ def safe_int(value, default=0):
         return default
 
 
+def upper_text(value):
+    return str(value or "").upper().strip()
+
+
 # --------------------------------------------------
 # EXTRACTION CONTEXTE COURSE
 # --------------------------------------------------
@@ -77,11 +81,6 @@ def extract_hippodrome_label(data):
 
 
 def extract_course_context(data):
-    """
-    Construit les champs de contexte côté backend.
-    On n'invente pas la météo : on la prend si elle est présente
-    dans la réponse source, sinon on renvoie None.
-    """
     hippodrome_label = extract_hippodrome_label(data)
 
     meteo = (
@@ -122,11 +121,43 @@ def extract_course_context(data):
 
 
 # --------------------------------------------------
+# NIVEAU DE COURSE
+# --------------------------------------------------
+
+
+def niveau_course_index(hippodrome=None, distance=None, partants=None):
+    note = 0
+
+    h = upper_text(hippodrome)
+    d = safe_int(distance, 0)
+    p = safe_int(partants, 0)
+
+    if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES"]):
+        note += 4
+    elif any(x in h for x in ["CABOURG", "GRAIGNES", "LAVAL", "CAEN"]):
+        note += 2
+    else:
+        note += 1
+
+    if d >= 2850:
+        note += 2
+    elif d >= 2100:
+        note += 1
+
+    if p >= 16:
+        note += 2
+    elif p >= 12:
+        note += 1
+
+    return min(note, 10)
+
+
+# --------------------------------------------------
 # SCORES ET INDICES
 # --------------------------------------------------
 
 
-def score(musique):
+def base_score_musique(musique):
     if not musique:
         return 0
 
@@ -175,6 +206,105 @@ def regularite_index(musique):
     return 0
 
 
+def course_level_adjustment(niveau_course, base_score):
+    """
+    Corrige légèrement la musique selon le niveau du lot.
+    Lot relevé + bonne musique = bonus.
+    Lot faible + musique flatteuse = légère décote.
+    """
+    niveau = safe_int(niveau_course, 0)
+    base = safe_int(base_score, 0)
+
+    if niveau >= 7 and base >= 12:
+        return 3
+    if niveau >= 5 and base >= 10:
+        return 2
+    if niveau <= 2 and base >= 20:
+        return -2
+    if niveau <= 3 and base >= 12:
+        return -1
+
+    return 0
+
+
+def extract_vent_strength(vent):
+    if vent is None:
+        return 0
+
+    if isinstance(vent, (int, float)):
+        return safe_int(vent, 0)
+
+    txt = upper_text(vent)
+
+    if "FORT" in txt or "STRONG" in txt:
+        return 25
+    if "MOD" in txt:
+        return 15
+    if "FAIBLE" in txt or "LOW" in txt:
+        return 8
+
+    return safe_int(vent, 0)
+
+
+def meteo_fit_index(ferrure=None, distance=None, vent=None, souplesse=None):
+    """
+    Petit ajustement prudent.
+    On ne veut pas inventer une science exacte, seulement intégrer
+    le contexte météo/piste dans l’analyse cheval.
+    """
+    score = 0
+
+    f = upper_text(ferrure)
+    d = safe_int(distance, 0)
+    v = extract_vent_strength(vent)
+    s = upper_text(souplesse)
+
+    # Longue distance + vent fort = contexte plus exigeant
+    if d >= 2700 and v >= 20:
+        score -= 1
+
+    # Souplesse / piste plus profonde
+    if any(x in s for x in ["SOUPLE", "LOURD", "COLLANT", "HEAVY"]):
+        if f in ["D4", "DP"]:
+            score += 1
+        elif f == "NR":
+            score -= 1
+
+    # Piste rapide / bon terrain
+    if any(x in s for x in ["BON", "RAPIDE", "GOOD", "FAST"]):
+        if f in ["DA", "D4", "DP"]:
+            score += 1
+
+    return max(-2, min(score, 2))
+
+
+def compute_score_ia(
+    musique=None,
+    niveau_course=0,
+    ferrure=None,
+    distance=None,
+    vent=None,
+    souplesse=None,
+):
+    base = base_score_musique(musique)
+    level_adj = course_level_adjustment(niveau_course, base)
+    meteo_adj = meteo_fit_index(
+        ferrure=ferrure,
+        distance=distance,
+        vent=vent,
+        souplesse=souplesse,
+    )
+
+    final_score = max(0, base + level_adj + meteo_adj)
+
+    return {
+        "baseScoreIA": base,
+        "courseLevelAdj": level_adj,
+        "meteoFitIndex": meteo_adj,
+        "scoreIA": final_score,
+    }
+
+
 def probabilite_from_score(score_ia, total_score):
     if total_score <= 0:
         return 1
@@ -197,7 +327,7 @@ def driver_index(driver):
     if not driver:
         return 0
 
-    d = str(driver).upper()
+    d = upper_text(driver)
     elite = [
         "RAFFIN",
         "ABRIVARD",
@@ -230,7 +360,7 @@ def trainer_index(entraineur):
     if not entraineur:
         return 0
 
-    e = str(entraineur).upper()
+    e = upper_text(entraineur)
     elite = [
         "BAZIRE",
         "ABRIVARD",
@@ -269,31 +399,29 @@ def retard_gains_index(age, gains, score_ia):
     return 0
 
 
-def niveau_course_index(hippodrome=None, distance=None, partants=None):
-    note = 0
+def market_bias_index(cote_pmu, probabilite_ia, probabilite_pmu):
+    """
+    Corrige le biais marché PMU.
+    Négatif : favori trop joué.
+    Positif : outsider potentiellement sous-coté.
+    """
+    cote = safe_float(cote_pmu, 0.0)
+    pia = safe_float(probabilite_ia, 0.0)
+    ppmu = safe_float(probabilite_pmu, 0.0)
 
-    h = str(hippodrome or "").upper()
-    d = safe_int(distance, 0)
-    p = safe_int(partants, 0)
+    if cote <= 3 and pia + 3 < ppmu:
+        return -4
 
-    if any(x in h for x in ["VINCENNES", "ENGHIEN", "CAGNES"]):
-        note += 4
-    elif any(x in h for x in ["CABOURG", "GRAIGNES", "LAVAL", "CAEN"]):
-        note += 2
-    else:
-        note += 1
+    if cote <= 5 and pia < ppmu:
+        return -2
 
-    if d >= 2850:
-        note += 2
-    elif d >= 2100:
-        note += 1
+    if cote >= 15 and pia >= ppmu + 8:
+        return 4
 
-    if p >= 16:
-        note += 2
-    elif p >= 12:
-        note += 1
+    if cote >= 10 and pia >= ppmu + 5:
+        return 2
 
-    return min(note, 10)
+    return 0
 
 
 # --------------------------------------------------
@@ -305,7 +433,7 @@ def analyse_forme(musique):
     if not musique:
         return "forme récente peu lisible"
 
-    s = score(musique)
+    s = base_score_musique(musique)
 
     if s >= 30:
         return "musique récente très solide avec plusieurs performances de premier plan"
@@ -319,7 +447,7 @@ def analyse_forme(musique):
 
 
 def analyse_ferrure(ferrure):
-    f = (ferrure or "").upper().strip()
+    f = upper_text(ferrure)
 
     if f in ["D4", "DP"]:
         return "ferrure attractive pour cet engagement"
@@ -346,7 +474,7 @@ def analyse_driver(driver):
         "PLOQUIN",
     ]
 
-    d = str(driver).upper()
+    d = upper_text(driver)
 
     if any(nom in d for nom in top_drivers):
         return "driver de tout premier plan dans cette catégorie"
@@ -367,7 +495,7 @@ def analyse_entraineur(entraineur):
         "HENRY",
     ]
 
-    e = str(entraineur).upper()
+    e = upper_text(entraineur)
 
     if any(nom in e for nom in top_trainers):
         return "entraînement redoutable sur ce type d'épreuve"
@@ -376,7 +504,7 @@ def analyse_entraineur(entraineur):
 
 def analyse_piste_meteo(distance=None, hippodrome=None, meteo=None, vent=None, souplesse=None):
     d = safe_int(distance, 0)
-    h = str(hippodrome or "").upper()
+    h = upper_text(hippodrome)
     notes = []
 
     if d >= 2850:
@@ -463,6 +591,10 @@ def faux_favori_pmu(cheval):
     score_ia = cheval.get("scoreIA", 0)
     confiance = cheval.get("confianceIA", 0)
     regularite = cheval.get("regulariteIndex", 0)
+    market_bias = cheval.get("marketBiasIndex", 0)
+
+    if market_bias <= -4:
+        return True
 
     if cote <= 4 and score_ia < 15:
         return True
@@ -522,15 +654,17 @@ def indice_pari(cheval):
     retard = cheval.get("retardGains", 0)
     value = cheval.get("value", 0)
     confiance = cheval.get("confianceIA", 0)
+    market_bias = cheval.get("marketBiasIndex", 0)
 
     note = (
-        score_ia * 0.30
-        + regularite * 0.20
+        score_ia * 0.28
+        + regularite * 0.18
         + driver * 0.10
         + trainer * 0.10
         + retard * 0.10
-        + value * 0.15
+        + value * 0.12
         + confiance * 0.05
+        + market_bias * 1.5
     )
 
     if note >= 30:
@@ -557,6 +691,9 @@ def build_analyse_ia(
     meteo=None,
     vent=None,
     souplesse=None,
+    niveau_course=None,
+    market_bias=None,
+    meteo_fit=None,
 ):
     tendances = []
 
@@ -580,6 +717,19 @@ def build_analyse_ia(
         tendances.append("L'écart IA/PMU reste légèrement favorable")
     else:
         tendances.append("Pas de value évidente face au marché PMU")
+
+    if safe_int(niveau_course, 0) >= 7:
+        tendances.append("Le lot du jour paraît relevé, ce qui renforce la sélectivité de la course")
+
+    if safe_int(market_bias, 0) <= -2:
+        tendances.append("Le marché PMU semble survaloriser ce profil")
+    elif safe_int(market_bias, 0) >= 2:
+        tendances.append("Le marché PMU semble sous-évaluer ce profil")
+
+    if safe_int(meteo_fit, 0) >= 1:
+        tendances.append("Le contexte météo-piste paraît plutôt favorable à ce cheval")
+    elif safe_int(meteo_fit, 0) <= -1:
+        tendances.append("Le contexte météo-piste ajoute un doute supplémentaire")
 
     tendances.append(
         analyse_piste_meteo(
@@ -711,13 +861,32 @@ def course(reunion: str, course: str):
         return {"error": "pmu_fetch_failed", "detail": str(e)}
 
     context = extract_course_context(data)
-
     participants = data.get("participants", [])
+    niveau_course = niveau_course_index(
+        hippodrome=context["hippodrome"],
+        distance=data.get("distance"),
+        partants=len(participants),
+    )
+
     chevaux = []
 
     for participant in participants:
         musique = participant.get("musique", "")
-        score_ia = score(musique)
+        ferrure = (
+            participant.get("ferrure")
+            or participant.get("deferre")
+            or participant.get("chaussure")
+            or "NR"
+        )
+
+        score_bundle = compute_score_ia(
+            musique=musique,
+            niveau_course=niveau_course,
+            ferrure=ferrure,
+            distance=data.get("distance"),
+            vent=context["vent"],
+            souplesse=context["souplesse"],
+        )
 
         chevaux.append(
             {
@@ -725,16 +894,16 @@ def course(reunion: str, course: str):
                 "nom": participant.get("nom"),
                 "driver": participant.get("driver"),
                 "entraineur": participant.get("entraineur"),
-                "ferrure": participant.get("ferrure")
-                or participant.get("deferre")
-                or participant.get("chaussure")
-                or "NR",
+                "ferrure": ferrure,
                 "musique": musique,
                 "corde": participant.get("placeCorde"),
                 "age": participant.get("age"),
                 "gains": participant.get("gains"),
                 "sexe": participant.get("sexe"),
-                "scoreIA": score_ia,
+                "baseScoreIA": score_bundle["baseScoreIA"],
+                "courseLevelAdj": score_bundle["courseLevelAdj"],
+                "meteoFitIndex": score_bundle["meteoFitIndex"],
+                "scoreIA": score_bundle["scoreIA"],
                 "cotePMU": (
                     (participant.get("dernierRapportDirect") or {}).get("rapport")
                     if isinstance(participant.get("dernierRapportDirect"), dict)
@@ -761,6 +930,12 @@ def course(reunion: str, course: str):
             cheval.get("scoreIA", 0),
         )
 
+        market_bias = market_bias_index(
+            cheval.get("cotePMU"),
+            prob,
+            probabilite_pmu,
+        )
+
         cheval["probabiliteIA"] = prob
         cheval["probabilitePMU"] = probabilite_pmu
         cheval["coteIA"] = cote_ia
@@ -770,6 +945,7 @@ def course(reunion: str, course: str):
         cheval["trainerIndex"] = trainer_index(cheval.get("entraineur"))
         cheval["retardGains"] = retard_gains
         cheval["regulariteIndex"] = regularite_index(cheval.get("musique"))
+        cheval["marketBiasIndex"] = market_bias
         cheval["dataTurfPro"] = build_data_turf_pro(
             cheval.get("driver"),
             cheval.get("entraineur"),
@@ -790,6 +966,9 @@ def course(reunion: str, course: str):
             meteo=context["meteo"],
             vent=context["vent"],
             souplesse=context["souplesse"],
+            niveau_course=niveau_course,
+            market_bias=market_bias,
+            meteo_fit=cheval.get("meteoFitIndex"),
         )
 
     chevaux = sorted(
@@ -810,19 +989,16 @@ def course(reunion: str, course: str):
         cheval["indicePari"] = indice_pari(cheval)
 
     return {
-    "reunion": reunion,
-    "course": course,
-    "hippodrome": context["hippodrome"],
-    "distance": data.get("distance"),
-    "partants": len(chevaux),
-    "meteo": context["meteo"],
-    "temperature": context["temperature"],
-    "vent": context["vent"],
-    "souplesse": context["souplesse"],
-    "niveauCourse": niveau_course_index(
-        hippodrome=context["hippodrome"],
-        distance=data.get("distance"),
-        partants=len(chevaux),
-    ),
-    "participants": chevaux,
+        "reunion": reunion,
+        "course": course,
+        "hippodrome": context["hippodrome"],
+        "distance": data.get("distance"),
+        "partants": len(chevaux),
+        "meteo": context["meteo"],
+        "temperature": context["temperature"],
+        "vent": context["vent"],
+        "souplesse": context["souplesse"],
+        "niveauCourse": niveau_course,
+        "participants": chevaux,
+        "synthesis": build_course_synthesis(chevaux),
     }
