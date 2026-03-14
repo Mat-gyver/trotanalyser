@@ -285,7 +285,7 @@ def tocard_ia(cote_pmu, score_ia, value, retard_gains):
     except Exception:
         c = 0.0
 
-    return c >= 15 and score_ia >= 10 and (value > 1 or retard_gains >= 5)
+    return c >= 15 and score_ia >= 10 and (value > 5 or retard_gains >= 5)
 
 
 def outsider_interessant(cote_pmu, score_ia, value, confiance_ia):
@@ -302,7 +302,7 @@ def badges_turf(cheval):
 
     if cheval.get("rankIA") == 1:
         badges.append("TOP IA")
-    if cheval.get("value", 0) > 0.4:
+    if cheval.get("value", 0) > 5:
         badges.append("VALUE BET")
     if fragile_favori(
         cheval.get("cotePMU"),
@@ -353,8 +353,10 @@ def build_analyse_ia(
     else:
         tendances.append("Doit surtout rassurer avant d'inspirer une pleine confiance")
 
-    if value >= 3:
-        tendances.append("Le modèle IA détecte une vraie value par rapport au PMU")
+    if value >= 10:
+        tendances.append("Le modèle IA détecte une très forte value par rapport au PMU")
+    elif value >= 5:
+        tendances.append("Le modèle IA détecte une value intéressante face au PMU")
     elif value > 0:
         tendances.append("L'écart IA/PMU reste légèrement favorable")
     else:
@@ -466,7 +468,9 @@ def course(reunion: str, course: str):
         except Exception:
             cote_pmu = 0.0
 
-        value = round(cote_pmu - cote_ia, 2)
+        probabilite_pmu = round(100 / cote_pmu, 2) if cote_pmu > 0 else 0.0
+        value = round(prob - probabilite_pmu, 2)
+
         confiance = confiance_from_score(cheval.get("scoreIA", 0))
         retard_gains = retard_gains_index(
             cheval.get("age"),
@@ -475,6 +479,7 @@ def course(reunion: str, course: str):
         )
 
         cheval["probabiliteIA"] = prob
+        cheval["probabilitePMU"] = probabilite_pmu
         cheval["coteIA"] = cote_ia
         cheval["value"] = value
         cheval["confianceIA"] = confiance
@@ -530,4 +535,5 @@ def course(reunion: str, course: str):
         "distance": data.get("distance"),
         "partants": len(chevaux),
         "participants": chevaux,
+    }
     }
