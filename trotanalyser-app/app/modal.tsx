@@ -1,30 +1,42 @@
-import { Link } from 'expo-router';
-import { StyleSheet } from 'react-native';
-
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 
 export default function ModalScreen() {
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">This is a modal</ThemedText>
-      <Link href="/" dismissTo style={styles.link}>
-        <ThemedText type="link">Go to home screen</ThemedText>
-      </Link>
-    </ThemedView>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>TrotAnalyser</Text>
+        <Text style={styles.text}>Écran modal désactivé.</Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    backgroundColor: "#04101a",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#0b1c2b",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#1f3d5a",
+  },
+  title: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  text: {
+    color: "#b9d6ea",
+    fontSize: 15,
+    lineHeight: 22,
   },
 });
-
