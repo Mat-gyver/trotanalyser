@@ -1,89 +1,88 @@
-import { useMemo } from "react";
 import type { CourseData, Participant } from "../types/courseScreen";
 
-type EnrichedParticipant = Participant & {
-  valueSignal: number;
-  favoriFragile: boolean;
-  grosTocard: boolean;
+type CourseAnalysisResult = {
+  sortedParticipants: Participant[];
+  top3IA: Participant[];
+  valueBets: Participant[];
+  topValue: Participant | null;
 };
 
-export function useCourseAnalysis(data: CourseData | null) {
-  const participants = useMemo<Participant[]>(() => {
-    if (!Array.isArray(data?.participants)) return [];
-    return data.participants;
-  }, [data]);
+function toNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
-  const sortedParticipants = useMemo<Participant[]>(() => {
-    return [...participants].sort(
-      (a, b) => (Number(b.scoreIA) || 0) - (Number(a.scoreIA) || 0),
-    );
-  }, [participants]);
+function normaliseParticipant(participant: Participant, index: number): Participant {
+  return {
+    ...participant,
+    numero: toNumber(participant.numero, index + 1),
+    scoreIA: toNumber(participant.scoreIA, 0),
+    probabiliteIA: toNumber(participant.probabiliteIA, 0),
+    confianceIA: toNumber(participant.confianceIA, 0),
+    value: toNumber(participant.value, 0),
+    retardGains: toNumber(participant.retardGains, 0),
+    driverIndex: toNumber(participant.driverIndex, 0),
+    trainerIndex: toNumber(participant.trainerIndex, 0),
+    rankIA: toNumber(participant.rankIA, 0),
+    cotePMU: toNumber(participant.cotePMU, 0),
+    badges: Array.isArray(participant.badges) ? participant.badges : [],
+    nom: participant.nom || `Cheval ${index + 1}`,
+    musique: participant.musique || "",
+    ferrure: participant.ferrure || "NR",
+    driver: participant.driver || "NR",
+    entraineur: participant.entraineur || "NR",
+    analyseIA: participant.analyseIA || "",
+    casaque: participant.casaque || "",
+  };
+}
 
-  const paceAnalysis = useMemo(() => {
-    const leaders = sortedParticipants.filter((p) =>
-      String(p.analyseIA || "").toLowerCase().includes("tête"),
-    );
+function compareParticipants(a: Participant, b: Participant): number {
+  const scoreDiff = toNumber(b.scoreIA) - toNumber(a.scoreIA);
+  if (scoreDiff !== 0) return scoreDiff;
 
-    const finishers = sortedParticipants.filter((p) =>
-      String(p.analyseIA || "").toLowerCase().includes("fin"),
-    );
+  const confianceDiff = toNumber(b.confianceIA) - toNumber(a.confianceIA);
+  if (confianceDiff !== 0) return confianceDiff;
 
-    let train: "RAPIDE" | "NORMAL" | "LENT" = "NORMAL";
+  const valueDiff = toNumber(b.value) - toNumber(a.value);
+  if (valueDiff !== 0) return valueDiff;
 
-    if (leaders.length >= 3) train = "RAPIDE";
-    else if (leaders.length <= 1) train = "LENT";
+  const driverDiff = toNumber(b.driverIndex) - toNumber(a.driverIndex);
+  if (driverDiff !== 0) return driverDiff;
 
-    return {
-      train,
-      leaders,
-      finishers,
-    };
-  }, [sortedParticipants]);
+  return toNumber(a.numero) - toNumber(b.numero);
+}
 
-  const enrichedSortedParticipants = useMemo<EnrichedParticipant[]>(() => {
-    return sortedParticipants.map((p) => {
-      const probIA = Number((p as any).probabiliteIA || 0);
-      const cote = Number(p.cotePMU || 0);
-      const retard = Number(p.retardGains || 0);
-      const scoreIA = Number(p.scoreIA || 0);
-      const driverIndex = Number(p.driverIndex || 0);
+export function useCourseAnalysis(data: CourseData | null | undefined): CourseAnalysisResult {
+  const rawParticipants = Array.isArray(data?.participants) ? data!.participants : [];
 
-      const probPMU = cote > 0 ? 100 / cote : 0;
-      const value = probIA - probPMU;
+  const participants = rawParticipants.map((participant, index) =>
+    normaliseParticipant(participant, index)
+  );
 
-      const favoriFragile =
-        cote > 0 && cote <= 3 && scoreIA < 15 && driverIndex < 5;
+  const sortedParticipants = [...participants]
+    .sort(compareParticipants)
+    .map((participant, index) => ({
+      ...participant,
+      rankIA: index + 1,
+    }));
 
-      const grosTocard = probIA >= 10 && cote >= 20 && retard >= 5;
+  const top3IA = sortedParticipants.slice(0, 3);
 
-      return {
-        ...p,
-        valueSignal: value,
-        favoriFragile,
-        grosTocard,
-      };
-    });
-  }, [sortedParticipants]);
+  const valueBets = sortedParticipants.filter(
+    (participant) => toNumber(participant.value, 0) > 0
+  );
 
-  const valueBets = useMemo<EnrichedParticipant[]>(() => {
-    return enrichedSortedParticipants
-      .filter((p) => p.valueSignal > 8)
-      .sort((a, b) => b.valueSignal - a.valueSignal);
-  }, [enrichedSortedParticipants]);
-
-  const top3IA = useMemo<EnrichedParticipant[]>(() => {
-    return enrichedSortedParticipants.slice(0, 3);
-  }, [enrichedSortedParticipants]);
-
-  const topValue = useMemo<EnrichedParticipant | null>(() => {
-    return valueBets.length > 0 ? valueBets[0] : null;
-  }, [valueBets]);
+  const topValue =
+    valueBets.length > 0
+      ? [...valueBets].sort(
+          (a, b) => toNumber(b.value, 0) - toNumber(a.value, 0)
+        )[0]
+      : null;
 
   return {
-    sortedParticipants: enrichedSortedParticipants,
+    sortedParticipants,
     top3IA,
     valueBets,
-    paceAnalysis,
     topValue,
   };
 }
