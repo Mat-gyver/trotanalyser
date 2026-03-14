@@ -327,6 +327,34 @@ def badges_turf(cheval):
 
     return badges
 
+def indice_pari(cheval):
+    score = cheval.get("scoreIA", 0)
+    driver = cheval.get("driverIndex", 0)
+    trainer = cheval.get("trainerIndex", 0)
+    retard = cheval.get("retardGains", 0)
+    value = cheval.get("value", 0)
+    confiance = cheval.get("confianceIA", 0)
+
+    note = (
+        score * 0.35
+        + driver * 0.10
+        + trainer * 0.10
+        + retard * 0.10
+        + value * 0.25
+        + confiance * 0.10
+    )
+
+    # Normalisation sur 5 étoiles
+    if note >= 30:
+        return 5
+    if note >= 24:
+        return 4
+    if note >= 18:
+        return 3
+    if note >= 12:
+        return 2
+    return 1
+
 
 def build_analyse_ia(
     musique,
@@ -519,7 +547,8 @@ def course(reunion: str, course: str):
         cheval["rankIA"] = i + 1
 
     for cheval in chevaux:
-        cheval["badges"] = badges_turf(cheval)
+    cheval["badges"] = badges_turf(cheval)
+    cheval["indicePari"] = indice_pari(cheval)
 
     hippodrome = data.get("hippodrome") or {}
     hippodrome_label = (
