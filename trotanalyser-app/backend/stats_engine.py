@@ -12,10 +12,16 @@ def last_12_months_start():
 
 
 def compute_entity_stats(results, field_name, entity_name):
+
     entity = normalize_name(entity_name)
-    filtered = [r for r in results if normalize_name(r.get(field_name)) == entity]
+
+    filtered = [
+        r for r in results
+        if normalize_name(r.get(field_name)) == entity
+    ]
 
     total = len(filtered)
+
     if total == 0:
         return {
             "name": entity_name,
@@ -33,8 +39,8 @@ def compute_entity_stats(results, field_name, entity_name):
     win_rate = round((wins / total) * 100, 2)
     place_rate = round((places / total) * 100, 2)
 
-    # score simple de départ, à enrichir plus tard
-    index_12m = round(win_rate * 0.6 + place_rate * 0.4, 2)
+    # score synthétique
+    index_12m = round((win_rate * 0.6) + (place_rate * 0.4), 2)
 
     return {
         "name": entity_name,
@@ -48,10 +54,22 @@ def compute_entity_stats(results, field_name, entity_name):
 
 
 def get_driver_stats_12m(driver_name):
+
     results = get_results_since(last_12_months_start())
-    return compute_entity_stats(results, "driver", driver_name)
+
+    return compute_entity_stats(
+        results,
+        "driver",
+        driver_name
+    )
 
 
 def get_trainer_stats_12m(trainer_name):
+
     results = get_results_since(last_12_months_start())
-    return compute_entity_stats(results, "entraineur", trainer_name)
+
+    return compute_entity_stats(
+        results,
+        "entraineur",
+        trainer_name
+    )
