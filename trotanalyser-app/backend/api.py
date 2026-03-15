@@ -12,6 +12,7 @@ from stats_engine import (
     get_trainer_stats_12m,
     get_driver_stats_30d,
     get_trainer_stats_30d,
+    get_stable_heat_30d,
 )
 from scripts.import_results_pmu import import_last_days
 
@@ -97,6 +98,7 @@ def course(reunion: str, course: str):
         trainer_stats_12m = get_trainer_stats_12m(p.get("entraineur"))
         driver_stats_30d = get_driver_stats_30d(p.get("driver"))
         trainer_stats_30d = get_trainer_stats_30d(p.get("entraineur"))
+        stable_heat_30d = get_stable_heat_30d(p.get("entraineur"))
 
         cheval = {
             "numero": p.get("numPmu"),
@@ -113,10 +115,13 @@ def course(reunion: str, course: str):
             "trainerStats12m": trainer_stats_12m,
             "driverStats30d": driver_stats_30d,
             "trainerStats30d": trainer_stats_30d,
+            "stableHeat30d": stable_heat_30d,
             "driverIndex12m": driver_stats_12m["index12m"],
             "trainerIndex12m": trainer_stats_12m["index12m"],
             "driverForm30j": driver_stats_30d["index30d"],
             "trainerForm30j": trainer_stats_30d["index30d"],
+            "stableHeatIndex30j": stable_heat_30d["index30d"],
+            "stableHeatLabel30j": stable_heat_30d["label"],
         }
 
         cheval["scoreIA"] = base_score_musique(cheval.get("musique"))
@@ -126,7 +131,8 @@ def course(reunion: str, course: str):
         cheval["scoreIA"] = round(
             cheval["scoreIA"]
             + (cheval["driverForm30j"] * 0.15)
-            + (cheval["trainerForm30j"] * 0.12),
+            + (cheval["trainerForm30j"] * 0.12)
+            + (cheval["stableHeatIndex30j"] * 0.10),
             2,
         )
 
@@ -139,6 +145,7 @@ def course(reunion: str, course: str):
             x.get("indiceFormeTrot", 0),
             x.get("driverForm30j", 0),
             x.get("trainerForm30j", 0),
+            x.get("stableHeatIndex30j", 0),
             x.get("driverIndex12m", 0),
             x.get("trainerIndex12m", 0),
         ),
@@ -177,4 +184,5 @@ def stats_trainer(name: str):
     return {
         "stats12m": get_trainer_stats_12m(name),
         "stats30d": get_trainer_stats_30d(name),
+        "stableHeat30d": get_stable_heat_30d(name),
     }
