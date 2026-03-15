@@ -13,6 +13,8 @@ from stats_engine import (
     get_driver_stats_30d,
     get_trainer_stats_30d,
     get_stable_heat_30d,
+    get_driver_distance_stats_12m,
+    get_trainer_distance_stats_12m,
 )
 from scripts.import_results_pmu import import_last_days
 
@@ -99,6 +101,14 @@ def course(reunion: str, course: str):
         driver_stats_30d = get_driver_stats_30d(p.get("driver"))
         trainer_stats_30d = get_trainer_stats_30d(p.get("entraineur"))
         stable_heat_30d = get_stable_heat_30d(p.get("entraineur"))
+        driver_distance_stats = get_driver_distance_stats_12m(
+            p.get("driver"),
+            context.get("distance"),
+        )
+        trainer_distance_stats = get_trainer_distance_stats_12m(
+            p.get("entraineur"),
+            context.get("distance"),
+        )
 
         cheval = {
             "numero": p.get("numPmu"),
@@ -116,12 +126,17 @@ def course(reunion: str, course: str):
             "driverStats30d": driver_stats_30d,
             "trainerStats30d": trainer_stats_30d,
             "stableHeat30d": stable_heat_30d,
+            "driverDistanceStats12m": driver_distance_stats,
+            "trainerDistanceStats12m": trainer_distance_stats,
             "driverIndex12m": driver_stats_12m["index12m"],
             "trainerIndex12m": trainer_stats_12m["index12m"],
             "driverForm30j": driver_stats_30d["index30d"],
             "trainerForm30j": trainer_stats_30d["index30d"],
             "stableHeatIndex30j": stable_heat_30d["index30d"],
             "stableHeatLabel30j": stable_heat_30d["label"],
+            "driverDistanceIndex": driver_distance_stats["indexDistance"],
+            "trainerDistanceIndex": trainer_distance_stats["indexDistance"],
+            "distanceBucket": driver_distance_stats["distanceBucket"],
         }
 
         cheval["scoreIA"] = base_score_musique(cheval.get("musique"))
@@ -132,7 +147,9 @@ def course(reunion: str, course: str):
             cheval["scoreIA"]
             + (cheval["driverForm30j"] * 0.15)
             + (cheval["trainerForm30j"] * 0.12)
-            + (cheval["stableHeatIndex30j"] * 0.10),
+            + (cheval["stableHeatIndex30j"] * 0.10)
+            + (cheval["driverDistanceIndex"] * 0.10)
+            + (cheval["trainerDistanceIndex"] * 0.08),
             2,
         )
 
@@ -146,6 +163,8 @@ def course(reunion: str, course: str):
             x.get("driverForm30j", 0),
             x.get("trainerForm30j", 0),
             x.get("stableHeatIndex30j", 0),
+            x.get("driverDistanceIndex", 0),
+            x.get("trainerDistanceIndex", 0),
             x.get("driverIndex12m", 0),
             x.get("trainerIndex12m", 0),
         ),
@@ -172,17 +191,27 @@ def course(reunion: str, course: str):
 
 
 @app.get("/api/stats/driver/{name}")
-def stats_driver(name: str):
-    return {
+def stats_driver(name: str, distance: int | None = None):
+    payload = {
         "stats12m": get_driver_stats_12m(name),
         "stats30d": get_driver_stats_30d(name),
     }
 
+    if distance is not None:
+        payload["distanceStats12m"] = get_driver_distance_stats_12m(name, distance)
+
+    return payload
+
 
 @app.get("/api/stats/trainer/{name}")
-def stats_trainer(name: str):
-    return {
+def stats_trainer(name: str, distance: int | None = None):
+    payload = {
         "stats12m": get_trainer_stats_12m(name),
         "stats30d": get_trainer_stats_30d(name),
         "stableHeat30d": get_stable_heat_30d(name),
     }
+
+    if distance is not None:
+        payload["distanceStats12m"] = get_trainer_distance_stats_12m(name, distance)
+
+    return payload
