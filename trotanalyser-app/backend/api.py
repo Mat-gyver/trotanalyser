@@ -123,7 +123,6 @@ def course(reunion: str, course: str):
         cheval["regulariteIndex"] = regularite_index(cheval.get("musique"))
         cheval["indiceFormeTrot"] = indice_forme_trot(cheval, context.get("distance"))
 
-        # intégration légère de la forme récente
         cheval["scoreIA"] = round(
             cheval["scoreIA"]
             + (cheval["driverForm30j"] * 0.15)
@@ -131,4 +130,51 @@ def course(reunion: str, course: str):
             2,
         )
 
-        chevaux.append(chevaux := cheval)
+        chevaux.append(cheval)
+
+    chevaux = sorted(
+        chevaux,
+        key=lambda x: (
+            x.get("scoreIA", 0),
+            x.get("indiceFormeTrot", 0),
+            x.get("driverForm30j", 0),
+            x.get("trainerForm30j", 0),
+            x.get("driverIndex12m", 0),
+            x.get("trainerIndex12m", 0),
+        ),
+        reverse=True,
+    )
+
+    for i, cheval in enumerate(chevaux):
+        cheval["rankIA"] = i + 1
+        cheval["badges"] = badges_turf(cheval)
+
+    return {
+        "reunion": reunion,
+        "course": course,
+        "hippodrome": context.get("hippodrome"),
+        "distance": context.get("distance"),
+        "meteo": context.get("meteo"),
+        "temperature": context.get("temperature"),
+        "vent": context.get("vent"),
+        "souplesse": context.get("souplesse"),
+        "partants": len(chevaux),
+        "participants": chevaux,
+        "synthesis": build_course_synthesis(chevaux),
+    }
+
+
+@app.get("/api/stats/driver/{name}")
+def stats_driver(name: str):
+    return {
+        "stats12m": get_driver_stats_12m(name),
+        "stats30d": get_driver_stats_30d(name),
+    }
+
+
+@app.get("/api/stats/trainer/{name}")
+def stats_trainer(name: str):
+    return {
+        "stats12m": get_trainer_stats_12m(name),
+        "stats30d": get_trainer_stats_30d(name),
+    }
