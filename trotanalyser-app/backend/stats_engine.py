@@ -11,6 +11,21 @@ def date_days_ago(days):
     return (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
 
+def distance_bucket(distance):
+    try:
+        d = int(distance or 0)
+    except Exception:
+        d = 0
+
+    if d == 0:
+        return "unknown"
+    if d < 2200:
+        return "sprint"
+    if d < 2700:
+        return "intermediaire"
+    return "tenue"
+
+
 def compute_entity_stats(results, field_name, entity_name):
     entity = normalize_name(entity_name)
 
@@ -47,6 +62,49 @@ def compute_entity_stats(results, field_name, entity_name):
         "winRate": win_rate,
         "placeRate": place_rate,
         "index": index_value,
+    }
+
+
+def compute_entity_distance_stats(results, field_name, entity_name, target_distance):
+    entity = normalize_name(entity_name)
+    bucket = distance_bucket(target_distance)
+
+    filtered = [
+        r for r in results
+        if normalize_name(r.get(field_name)) == entity
+        and distance_bucket(r.get("distance")) == bucket
+    ]
+
+    total = len(filtered)
+
+    if total == 0:
+        return {
+            "name": entity_name,
+            "distanceBucket": bucket,
+            "courses": 0,
+            "wins": 0,
+            "places": 0,
+            "winRate": 0.0,
+            "placeRate": 0.0,
+            "indexDistance": 0.0,
+        }
+
+    wins = sum(1 for r in filtered if r.get("position") == 1)
+    places = sum(1 for r in filtered if r.get("position") in [1, 2, 3])
+
+    win_rate = round((wins / total) * 100, 2)
+    place_rate = round((places / total) * 100, 2)
+    index_distance = round((win_rate * 0.6) + (place_rate * 0.4), 2)
+
+    return {
+        "name": entity_name,
+        "distanceBucket": bucket,
+        "courses": total,
+        "wins": wins,
+        "places": places,
+        "winRate": win_rate,
+        "placeRate": place_rate,
+        "indexDistance": index_distance,
     }
 
 
@@ -132,3 +190,13 @@ def get_stable_heat_30d(trainer_name):
         "index30d": index30d,
         "label": label,
     }
+
+
+def get_driver_distance_stats_12m(driver_name, distance):
+    results = get_results_since(date_days_ago(365))
+    return compute_entity_distance_stats(results, "driver", driver_name, distance)
+
+
+def get_trainer_distance_stats_12m(trainer_name, distance):
+    results = get_results_since(date_days_ago(365))
+    return compute_entity_distance_stats(results, "entraineur", trainer_name, distance)
