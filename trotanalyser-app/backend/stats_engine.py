@@ -7,12 +7,11 @@ def normalize_name(value):
     return str(value or "").strip().upper()
 
 
-def last_12_months_start():
-    return (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+def date_days_ago(days):
+    return (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 def compute_entity_stats(results, field_name, entity_name):
-
     entity = normalize_name(entity_name)
 
     filtered = [
@@ -30,7 +29,7 @@ def compute_entity_stats(results, field_name, entity_name):
             "places": 0,
             "winRate": 0.0,
             "placeRate": 0.0,
-            "index12m": 0.0,
+            "index": 0.0,
         }
 
     wins = sum(1 for r in filtered if r.get("position") == 1)
@@ -39,8 +38,7 @@ def compute_entity_stats(results, field_name, entity_name):
     win_rate = round((wins / total) * 100, 2)
     place_rate = round((places / total) * 100, 2)
 
-    # score synthétique
-    index_12m = round((win_rate * 0.6) + (place_rate * 0.4), 2)
+    index_value = round((win_rate * 0.6) + (place_rate * 0.4), 2)
 
     return {
         "name": entity_name,
@@ -49,27 +47,65 @@ def compute_entity_stats(results, field_name, entity_name):
         "places": places,
         "winRate": win_rate,
         "placeRate": place_rate,
-        "index12m": index_12m,
+        "index": index_value,
     }
 
 
 def get_driver_stats_12m(driver_name):
+    results = get_results_since(date_days_ago(365))
+    stats = compute_entity_stats(results, "driver", driver_name)
 
-    results = get_results_since(last_12_months_start())
-
-    return compute_entity_stats(
-        results,
-        "driver",
-        driver_name
-    )
+    return {
+        "name": stats["name"],
+        "courses": stats["courses"],
+        "wins": stats["wins"],
+        "places": stats["places"],
+        "winRate": stats["winRate"],
+        "placeRate": stats["placeRate"],
+        "index12m": stats["index"],
+    }
 
 
 def get_trainer_stats_12m(trainer_name):
+    results = get_results_since(date_days_ago(365))
+    stats = compute_entity_stats(results, "entraineur", trainer_name)
 
-    results = get_results_since(last_12_months_start())
+    return {
+        "name": stats["name"],
+        "courses": stats["courses"],
+        "wins": stats["wins"],
+        "places": stats["places"],
+        "winRate": stats["winRate"],
+        "placeRate": stats["placeRate"],
+        "index12m": stats["index"],
+    }
 
-    return compute_entity_stats(
-        results,
-        "entraineur",
-        trainer_name
-    )
+
+def get_driver_stats_30d(driver_name):
+    results = get_results_since(date_days_ago(30))
+    stats = compute_entity_stats(results, "driver", driver_name)
+
+    return {
+        "name": stats["name"],
+        "courses": stats["courses"],
+        "wins": stats["wins"],
+        "places": stats["places"],
+        "winRate": stats["winRate"],
+        "placeRate": stats["placeRate"],
+        "index30d": stats["index"],
+    }
+
+
+def get_trainer_stats_30d(trainer_name):
+    results = get_results_since(date_days_ago(30))
+    stats = compute_entity_stats(results, "entraineur", trainer_name)
+
+    return {
+        "name": stats["name"],
+        "courses": stats["courses"],
+        "wins": stats["wins"],
+        "places": stats["places"],
+        "winRate": stats["winRate"],
+        "placeRate": stats["placeRate"],
+        "index30d": stats["index"],
+    }
