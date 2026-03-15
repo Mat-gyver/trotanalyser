@@ -37,7 +37,6 @@ def compute_entity_stats(results, field_name, entity_name):
 
     win_rate = round((wins / total) * 100, 2)
     place_rate = round((places / total) * 100, 2)
-
     index_value = round((win_rate * 0.6) + (place_rate * 0.4), 2)
 
     return {
@@ -108,4 +107,28 @@ def get_trainer_stats_30d(trainer_name):
         "winRate": stats["winRate"],
         "placeRate": stats["placeRate"],
         "index30d": stats["index"],
+    }
+
+
+def get_stable_heat_30d(trainer_name):
+    stats = get_trainer_stats_30d(trainer_name)
+    index30d = stats["index30d"]
+    courses = stats["courses"]
+
+    if courses < 3:
+        label = "Peu couru"
+    elif index30d >= 35:
+        label = "Écurie brûlante"
+    elif index30d >= 25:
+        label = "Écurie en forme"
+    elif index30d >= 15:
+        label = "Écurie correcte"
+    else:
+        label = "Écurie froide"
+
+    return {
+        "name": trainer_name,
+        "courses30d": courses,
+        "index30d": index30d,
+        "label": label,
     }
