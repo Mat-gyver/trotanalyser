@@ -1,25 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from pmu_client import (
-    today,
-    get_programme_today,
-    get_participants,
-)
-from context import (
-    extract_course_context,
-    find_reunion_and_course,
-    extract_hippodrome_label,
-)
-from scoring import (
-    base_score_musique,
-    regularite_index,
-    indice_forme_trot,
-)
+from pmu_client import today, get_programme_today, get_participants
+from context import extract_course_context, find_reunion_and_course, extract_hippodrome_label
+from scoring import base_score_musique, regularite_index, indice_forme_trot
 from badges import badges_turf
 from synthesis import build_course_synthesis
 from stats_db import init_db
-from stats_engine import get_driver_stats_12m, get_trainer_stats_12m
+from stats_engine import (
+    get_driver_stats_12m,
+    get_trainer_stats_12m,
+    get_driver_stats_30d,
+    get_trainer_stats_30d,
+)
 from scripts.import_results_pmu import import_last_days
 
 app = FastAPI()
@@ -100,8 +93,10 @@ def course(reunion: str, course: str):
     chevaux = []
 
     for p in participants:
-        driver_stats = get_driver_stats_12m(p.get("driver"))
-        trainer_stats = get_trainer_stats_12m(p.get("entraineur"))
+        driver_stats_12m = get_driver_stats_12m(p.get("driver"))
+        trainer_stats_12m = get_trainer_stats_12m(p.get("entraineur"))
+        driver_stats_30d = get_driver_stats_30d(p.get("driver"))
+        trainer_stats_30d = get_trainer_stats_30d(p.get("entraineur"))
 
         cheval = {
             "numero": p.get("numPmu"),
@@ -114,53 +109,26 @@ def course(reunion: str, course: str):
             "age": p.get("age"),
             "gains": p.get("gains"),
             "sexe": p.get("sexe"),
-            "driverStats12m": driver_stats,
-            "trainerStats12m": trainer_stats,
-            "driverIndex12m": driver_stats["index12m"],
-            "trainerIndex12m": trainer_stats["index12m"],
+            "driverStats12m": driver_stats_12m,
+            "trainerStats12m": trainer_stats_12m,
+            "driverStats30d": driver_stats_30d,
+            "trainerStats30d": trainer_stats_30d,
+            "driverIndex12m": driver_stats_12m["index12m"],
+            "trainerIndex12m": trainer_stats_12m["index12m"],
+            "driverForm30j": driver_stats_30d["index30d"],
+            "trainerForm30j": trainer_stats_30d["index30d"],
         }
 
         cheval["scoreIA"] = base_score_musique(cheval.get("musique"))
         cheval["regulariteIndex"] = regularite_index(cheval.get("musique"))
         cheval["indiceFormeTrot"] = indice_forme_trot(cheval, context.get("distance"))
 
-        chevaux.append(cheval)
+        # intégration légère de la forme récente
+        cheval["scoreIA"] = round(
+            cheval["scoreIA"]
+            + (cheval["driverForm30j"] * 0.15)
+            + (cheval["trainerForm30j"] * 0.12),
+            2,
+        )
 
-    chevaux = sorted(
-        chevaux,
-        key=lambda x: (
-            x.get("scoreIA", 0),
-            x.get("indiceFormeTrot", 0),
-            x.get("driverIndex12m", 0),
-            x.get("trainerIndex12m", 0),
-        ),
-        reverse=True,
-    )
-
-    for i, cheval in enumerate(chevaux):
-        cheval["rankIA"] = i + 1
-        cheval["badges"] = badges_turf(cheval)
-
-    return {
-        "reunion": reunion,
-        "course": course,
-        "hippodrome": context.get("hippodrome"),
-        "distance": context.get("distance"),
-        "meteo": context.get("meteo"),
-        "temperature": context.get("temperature"),
-        "vent": context.get("vent"),
-        "souplesse": context.get("souplesse"),
-        "partants": len(chevaux),
-        "participants": chevaux,
-        "synthesis": build_course_synthesis(chevaux),
-    }
-
-
-@app.get("/api/stats/driver/{name}")
-def stats_driver(name: str):
-    return get_driver_stats_12m(name)
-
-
-@app.get("/api/stats/trainer/{name}")
-def stats_trainer(name: str):
-    return get_trainer_stats_12m(name)
+        chevaux.append(chevaux := cheval)
