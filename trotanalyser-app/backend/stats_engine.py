@@ -26,6 +26,21 @@ def distance_bucket(distance):
     return "tenue"
 
 
+def normalize_start_type(value):
+    txt = normalize_name(value)
+
+    if not txt:
+        return "unknown"
+
+    if "AUTO" in txt or "AUTOSTART" in txt:
+        return "autostart"
+
+    if "VOLTE" in txt or "VOLTÉ" in txt:
+        return "volte"
+
+    return "unknown"
+
+
 def compute_entity_stats(results, field_name, entity_name):
     entity = normalize_name(entity_name)
 
@@ -151,6 +166,49 @@ def compute_entity_track_stats(results, field_name, entity_name, hippodrome):
     }
 
 
+def compute_entity_start_stats(results, field_name, entity_name, start_type):
+    entity = normalize_name(entity_name)
+    normalized_start_type = normalize_start_type(start_type)
+
+    filtered = [
+        r for r in results
+        if normalize_name(r.get(field_name)) == entity
+        and normalize_start_type(r.get("start_type")) == normalized_start_type
+    ]
+
+    total = len(filtered)
+
+    if total == 0:
+        return {
+            "name": entity_name,
+            "startType": normalized_start_type,
+            "courses": 0,
+            "wins": 0,
+            "places": 0,
+            "winRate": 0.0,
+            "placeRate": 0.0,
+            "indexStart": 0.0,
+        }
+
+    wins = sum(1 for r in filtered if r.get("position") == 1)
+    places = sum(1 for r in filtered if r.get("position") in [1, 2, 3])
+
+    win_rate = round((wins / total) * 100, 2)
+    place_rate = round((places / total) * 100, 2)
+    index_start = round((win_rate * 0.6) + (place_rate * 0.4), 2)
+
+    return {
+        "name": entity_name,
+        "startType": normalized_start_type,
+        "courses": total,
+        "wins": wins,
+        "places": places,
+        "winRate": win_rate,
+        "placeRate": place_rate,
+        "indexStart": index_start,
+    }
+
+
 def get_driver_stats_12m(driver_name):
     results = get_results_since(date_days_ago(365))
     stats = compute_entity_stats(results, "driver", driver_name)
@@ -253,3 +311,13 @@ def get_driver_track_stats_12m(driver_name, hippodrome):
 def get_trainer_track_stats_12m(trainer_name, hippodrome):
     results = get_results_since(date_days_ago(365))
     return compute_entity_track_stats(results, "entraineur", trainer_name, hippodrome)
+
+
+def get_driver_start_stats_12m(driver_name, start_type):
+    results = get_results_since(date_days_ago(365))
+    return compute_entity_start_stats(results, "driver", driver_name, start_type)
+
+
+def get_trainer_start_stats_12m(trainer_name, start_type):
+    results = get_results_since(date_days_ago(365))
+    return compute_entity_start_stats(results, "entraineur", trainer_name, start_type)
